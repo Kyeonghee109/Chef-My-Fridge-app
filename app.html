@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>점심 메뉴 추천</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        #menu {
+            font-size: 24px;
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+        }
+        #recentRecommendations {
+            margin-top: 30px;
+            font-size: 18px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>점심 메뉴 추천기</h1>
+    <div id="menu">여기를 클릭하여 점심 메뉴를 추천받으세요!</div>
+    <div>
+        <button onclick="setCuisine('korean')">한식</button>
+        <button onclick="setCuisine('western')">양식</button>
+        <button onclick="setCuisine('chinese')">중식</button>
+    </div>
+    <button onclick="recommendMenu()">메뉴 추천</button>
+
+    <div id="recentRecommendations">
+        <h2>최근 추천 메뉴</h2>
+        <ul id="recommendationList"></ul>
+    </div>
+
+    <script>
+        const { createClient } = supabase;
+        const db = createClient("https://hpusguxlhmekgjmtuumr.supabase.co", "sb_publishable_PmJkTKCResfQtWSbPSeEzQ_CTa-vVnE");
+
+        const menus = {
+            korean: ['비빔밥', '김치찌개', '떡볶이', '삼겹살', '냉면', '오므라이스', '갈비탕'],
+            western: ['피자', '햄버거', '샐러드', '스파게티'],
+            chinese: ['짜장면', '짬뽕', '탕수육', '볶음밥']
+        };
+
+        let selectedCuisine = 'korean';
+        const recentMenus = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await db.auth.signInAnonymously();
+            await loadRecentMenus();
+            document.getElementById('menu').textContent = `현재 선택된 메뉴: ${selectedCuisine === 'korean' ? '한식' : selectedCuisine === 'western' ? '양식' : '중식'}`;
+            updateRecentRecommendations();
+        });
+
+        function setCuisine(cuisine) {
+            selectedCuisine = cuisine;
+            document.getElementById('menu').textContent = `현재 선택된 메뉴: ${cuisine === 'korean' ? '한식' : cuisine === 'western' ? '양식' : '중식'}`;
+        }
+
+        async function recommendMenu() {
+            const selectedMenus = menus[selectedCuisine];
+            const randomIndex = Math.floor(Math.random() * selectedMenus.length);
+            const recommendedMenu = selectedMenus[randomIndex];
+            document.getElementById('menu').textContent = recommendedMenu;
+
+            recentMenus.unshift(recommendedMenu);
+            if (recentMenus.length > 5) {
+                recentMenus.pop();
+            }
+
+            await insertMenu(recommendedMenu);
+            updateRecentRecommendations();
+        }
+
+        async function insertMenu(menu) {
+            await db.from('memos').insert([{ text: menu }]);
+        }
+
+        async function loadRecentMenus() {
+            const { data } = await db.from('memos').select('text').order('id', { ascending: false }).limit(5);
+            if (data) {
+                data.forEach(item => recentMenus.push(item.text));
+            }
+        }
+
+        function updateRecentRecommendations() {
+            const recommendationList = document.getElementById('recommendationList');
+            recommendationList.innerHTML = '';
+            recentMenus.forEach(menu => {
+                const listItem = document.createElement('li');
+                listItem.textContent = menu;
+                recommendationList.appendChild(listItem);
+            });
+        }
+    </script>
+</body>
+</html>
