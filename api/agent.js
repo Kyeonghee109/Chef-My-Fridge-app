@@ -121,6 +121,13 @@ function normalizeIngredient(value) {
 
 // 검색된 레시피 원문에서 쉼표로 나열된 필요 재료를 추출합니다.
 function extractRecipeIngredients(content) {
+  const labeledMatch = String(content || '').match(/필요\s*재료\s*:\s*(.+?)(?:\.\s*(?:조리 순서|태그|조리 시간|난이도)\s*:|$)/);
+  if (labeledMatch) {
+    return labeledMatch[1]
+      .split(/,|\s+및\s+|\s+와\s+|\s+과\s+/)
+      .map(item => item.trim().replace(/[.。]$/g, ''))
+      .filter(Boolean);
+  }
   const patterns = [
     /(?:은|는)\s+(.+?)(?:으로 만드는|으로 만들 수 있다|으로 만든다|로 만든다|을 넣어|를 사용한다)[.。]/,
     /(?:은|는)\s+(.+?)(?:으로 만드는|으로 만들 수 있다|으로 만든다|로 만든다|을 넣어|를 사용한다)/
@@ -143,8 +150,8 @@ function calculateMissingIngredients(ownedIngredients, requiredIngredients) {
 function fallbackMenuFromHit(hit, ownedIngredients) {
   const content = String(hit.content || '');
   const requiredIngredients = hit.requiredIngredients || [];
-  const cookTime = content.match(/(?:조리 시간은|조리 시간은 약)\s*(\d+)분/);
-  const difficulty = content.match(/난이도는\s*(쉬움|보통|어려움)/);
+  const cookTime = content.match(/(?:조리 시간은|조리 시간은 약|조리 시간\s*:)\s*(\d+)분/);
+  const difficulty = content.match(/(?:난이도는|난이도\s*:)\s*(쉬움|보통|어려움)/);
   return {
     name: hit.recipe_name,
     cuisine: hit.cuisine || inferCuisine(hit.recipe_name, content),
@@ -199,16 +206,24 @@ module.exports = async function handler(req, res) {
         : inferCuisine(hit.recipe_name, hit.content)
     }));
 
-    const answer = await openai('chat/completions', {
-      model: 'gpt-4o-mini',
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: '검색 문서에 근거한 JSON만 반환하세요.' },
-        { role: 'user', content: promptFor({ ingredients: body.ingredients, filters: { ...filters, cuisines }, exclude, hits: enrichedHits }) }
-      ]
-    }, config.openai);
-    const result = JSON.parse(answer.choices?.[0]?.message?.content || '{}');
-    const generatedMenus = Array.isArray(result.menus) ? result.menus : [];
+    // 검색 후보는 충분히 확보하되, LLM 컨텍스트는 제한해 요청 크기 초과를 방지합니다.
+    const promptHits = enrichedHits.slice(0, 40);
+    let generatedMenus = [];
+    try {
+      const answer = await openai('chat/completions', {
+        model: 'gpt-4o-mini',
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: '검색 문서에 근거한 JSON만 반환하세요.' },
+          { role: 'user', content: promptFor({ ingredients: body.ingredients, filters: { ...filters, cuisines }, exclude, hits: promptHits }) }
+        ]
+      }, config.openai);
+      const result = JSON.parse(answer.choices?.[0]?.message?.content || '{}');
+      generatedMenus = Array.isArray(result.menus) ? result.menus : [];
+    } catch (error) {
+      // LLM 응답이 실패해도 검색 후보의 기본 정보로 3개를 구성합니다.
+      console.error('LLM recommendation failed:', error.message);
+    }
     const hitByName = new Map(enrichedHits.map(hit => [hit.recipe_name, hit]));
     const normalizedMenuName = value => String(value || '').replace(/\s+/g, '');
     const findHit = name => hitByName.get(name) || enrichedHits.find(hit => normalizedMenuName(hit.recipe_name) === normalizedMenuName(name));
@@ -238,7 +253,7 @@ module.exports = async function handler(req, res) {
       menus.push(fallbackMenuFromHit(hit, body.ingredients));
       seenNames.add(hit.recipe_name);
     }
-    if (menus.length < 3) throw new Error('3개의 추천 후보를 확보하지 못했습니다.');
+    if (menus.length < 3) throw new Error('3개의 검색 후보를 확보하지 못했습니다.');
     return res.status(200).json({
       menus: menus.slice(0, 3),
       cuisines,
@@ -246,7 +261,7 @@ module.exports = async function handler(req, res) {
       message: usedFallbackCuisine ? '선택한 음식 종류가 부족해 다른 음식 종류의 메뉴를 함께 추천했어요.' : undefined
     });
   } catch (error) {
-    console.error(error.message);
-    return res.status(502).json({ error: 'RAG 추천을 생성하지 못했습니다.' });
+    console.error('Recommendation request failed:', error.message);
+    return res.status(502).json({ error: '다른 메뉴 추천을 생성하지 못했습니다.' });
   }
 };

@@ -80,4 +80,4 @@ def recommend(request: RecommendRequest) -> dict[str, object]:
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except Exception as error:
-        raise HTTPException(status_code=502, detail="레시피 추천을 생성하지 못했습니다.") from error
+        raise HTTPException(status_code=502, detail="다른 메뉴 추천을 생성하지 못했습니다.") from error
