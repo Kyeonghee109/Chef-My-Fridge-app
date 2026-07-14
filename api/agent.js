@@ -200,8 +200,12 @@ module.exports = async function handler(req, res) {
       menus.push(fallbackMenuFromHit(hit, body.ingredients));
       seenNames.add(hit.recipe_name);
     }
-    if (menus.length < 3) throw new Error('추천 가능한 고유 레시피가 3개 미만입니다.');
-    return res.status(200).json({ menus, cuisines, sources: cuisineHits.map(hit => hit.recipe_name) });
+    return res.status(200).json({
+      menus,
+      cuisines,
+      sources: cuisineHits.map(hit => hit.recipe_name),
+      message: menus.length < 3 ? '추가로 추천할 수 있는 다른 메뉴가 부족합니다.' : undefined
+    });
   } catch (error) {
     console.error(error.message);
     return res.status(502).json({ error: 'RAG 추천을 생성하지 못했습니다.' });
