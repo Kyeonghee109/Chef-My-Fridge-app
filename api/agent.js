@@ -3,7 +3,7 @@ const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const env = () => ({
   openai: process.env.OPENAI_API_KEY,
   supabaseUrl: process.env.SUPABASE_URL,
-  supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY
+  supabaseKey: process.env.SUPABASE_ANON_KEY
 });
 
 async function openai(path, body, key) {
