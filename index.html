@@ -22,6 +22,7 @@
     h3 { margin:0; font-size:1.2rem; letter-spacing:-.035em; }
     p { line-height:1.7; }
     .hero { display:grid; align-items:center; min-height:100vh; margin-bottom:0; opacity:var(--hero-opacity,1); transform:translateY(var(--hero-y,0px)) scale(var(--hero-scale,1)); transform-origin:center top; will-change:opacity,transform; }
+    .hero[hidden] { display:none; }
     .hero-mark { position:relative; display:grid; place-items:center; min-height:420px; max-width:960px; margin:0 auto; overflow:hidden; background:transparent; }
     .hero-copy { position:relative; z-index:1; max-width:800px; padding:32px; color:var(--muted); font-size:1.05rem; text-align:center; }
     .hero-copy h1 { margin:0 0 18px; animation:hero-title-in .8s cubic-bezier(.22,1,.36,1) both; }
@@ -155,6 +156,7 @@
     const screens = { ingredients:$('#ingredientsScreen'), results:$('#resultsScreen'), detail:$('#detailScreen') };
     const hero = $('.hero');
     const ingredientsScreen = $('#ingredientsScreen');
+    let heroDismissed=false;
     let storyFrame=0;
     const updateStory = () => { storyFrame=0; const progress=Math.min(Math.max(window.scrollY/(window.innerHeight*.85),0),1); hero.style.setProperty('--hero-opacity',(1-progress).toFixed(3)); hero.style.setProperty('--hero-scale',(1-progress*.04).toFixed(3)); hero.style.setProperty('--hero-y',`${(-progress*60).toFixed(1)}px`); };
     window.addEventListener('scroll',()=>{ if(!storyFrame) storyFrame=requestAnimationFrame(updateStory); },{passive:true});
@@ -172,7 +174,7 @@
     const el = (tag, className, content) => { const node=document.createElement(tag); if(className) node.className=className; if(content !== undefined) node.append(text(content)); return node; };
     const normalized = (value) => value.trim().replace(/\s+/g,' ').toLocaleLowerCase('ko-KR');
 
-    function showScreen(screen) { state.screen=screen; hero.hidden=screen!=='ingredients'; Object.entries(screens).forEach(([name,node]) => { node.hidden=name!==screen; }); window.scrollTo({top:0,behavior:'smooth'}); }
+    function showScreen(screen) { state.screen=screen; if(screen!=='ingredients') heroDismissed=true; hero.hidden=heroDismissed; Object.entries(screens).forEach(([name,node]) => { node.hidden=name!==screen; }); window.scrollTo({top:0,behavior:'smooth'}); }
     function setStatus(message='') { $('#status').textContent=message; }
     function setError(message='', target='#ingredientError') { $('#ingredientError').textContent=''; $('#resultError').textContent=''; if(message) $(target).textContent=message; state.error=message; }
     function renderTags() { const grid=$('#ingredientGrid'); grid.replaceChildren(); INGREDIENTS.forEach((name,index) => { const button=el('button','tag',name); button.style.setProperty('--chip-delay',`${index*.08}s`); if(ingredientsScreen.dataset.chipsEntered) button.classList.add('chip-entered'); button.type='button'; button.classList.toggle('selected',state.selectedIngredients.some(item=>normalized(item)===normalized(name))); button.setAttribute('aria-pressed',String(button.classList.contains('selected'))); button.addEventListener('click',()=>toggleIngredient(name)); grid.append(button); }); }
