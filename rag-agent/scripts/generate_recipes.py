@@ -88,6 +88,11 @@ def make_recipe(recipe_id: int, style: tuple, main: tuple[str, str], vegetable: 
 
 def add_existing_cuisine(recipe: dict) -> dict:
     """기존 샘플 레시피에 고정된 5개 음식 종류 중 알맞은 값을 추가합니다."""
+    # 사용자가 지정한 예외 분류 규칙을 가장 먼저 적용합니다.
+    if "죽" in recipe["title"]:
+        return {**recipe, "cuisine": ["한식"]}
+    if "스프" in recipe["title"] or "수프" in recipe["title"]:
+        return {**recipe, "cuisine": ["양식"]}
     cuisine = EXISTING_CUISINES.get(recipe["title"])
     if cuisine is None:
         cuisine = [tag for tag in recipe.get("tags", []) if tag in FIXED_CUISINES] or ["한식"]

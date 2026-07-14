@@ -64,6 +64,17 @@ final_score = (match_count * 0.5) + (match_ratio * 0.3) + (coverage_ratio * 0.2)
 
 재료 정규화 동의어는 [ingredient_aliases.json](ingredient_aliases.json)에서 관리합니다.
 
+## 만개의레시피 개별 URL 가져오기
+
+만개의레시피의 공개 대량 데이터 다운로드 없이, 사용 권한이 있는 개별 레시피 URL만 가져옵니다. URL 목록을 한 줄에 하나씩 `urls.txt`에 저장한 뒤 실행합니다.
+
+```bash
+python scripts/import_10000recipe.py urls.txt
+python ingest.py
+```
+
+가져온 레시피에는 `source: "10000recipe"`, `source_url`, `cuisine`이 기록됩니다. `죽`은 한식, `스프`·`수프`는 양식으로 분류합니다.
+
 테스트:
 
 ```bash
