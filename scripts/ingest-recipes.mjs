@@ -7,7 +7,7 @@ const recipes = JSON.parse(await fs.readFile(new URL('../data/recipes.json', imp
 const chunks = recipes.flatMap(recipe => {
   const size = 300, overlap = 50;
   const output = [];
-  for (let start = 0; start < recipe.text.length; start += size - overlap) output.push({ recipe_name: recipe.name, content: recipe.text.slice(start, start + size), metadata: { source: 'recipes.json' } });
+  for (let start = 0; start < recipe.text.length; start += size - overlap) output.push({ recipe_name: recipe.name, content: recipe.text.slice(start, start + size), metadata: { source: 'recipes.json', cuisine: recipe.cuisine || [] } });
   return output;
 });
 

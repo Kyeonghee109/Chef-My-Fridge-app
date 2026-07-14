@@ -5,6 +5,17 @@ const RECIPE_CUISINES = {
   '닭가슴살 채소볶음': ['한식'], '토마토 파스타': ['양식'], '감자채 볶음': ['한식']
 };
 
+// 기존 검색 문서에 cuisine metadata가 없거나 이름이 변형되어도 음식 종류를 보완합니다.
+function inferCuisine(recipeName, content = '') {
+  if (RECIPE_CUISINES[recipeName]) return RECIPE_CUISINES[recipeName];
+  const text = `${recipeName} ${content}`;
+  if (/(짜장|탕수|마파|중화|새우 볶음밥)/.test(text)) return ['중식'];
+  if (/(우동|초밥|사시미|일식|일본식|카레)/.test(text)) return ['일식'];
+  if (/(파스타|피자|오믈렛|리소토|샐러드|스테이크|양식)/.test(text)) return ['양식'];
+  if (/(떡볶이|김밥|김치전|비빔국수|분식)/.test(text)) return ['분식'];
+  return ['한식'];
+}
+
 const env = () => ({
   openai: process.env.OPENAI_API_KEY,
   supabaseUrl: process.env.SUPABASE_URL,
@@ -76,7 +87,12 @@ function validCuisines(cuisines) {
 // 레시피의 cuisine 배열과 선택 조건을 비교해 OR 조건으로 후보를 필터링합니다.
 function filterByCuisine(hits, cuisines) {
   if (!cuisines.length) return hits;
-  return hits.filter(hit => (RECIPE_CUISINES[hit.recipe_name] || []).some(cuisine => cuisines.includes(cuisine)));
+  return hits.filter(hit => {
+    const cuisine = Array.isArray(hit.metadata?.cuisine) && hit.metadata.cuisine.length
+      ? hit.metadata.cuisine
+      : inferCuisine(hit.recipe_name, hit.content);
+    return cuisine.some(value => cuisines.includes(value));
+  });
 }
 
 // 재료명 비교를 위해 공백과 문장부호를 정리합니다.
@@ -112,7 +128,7 @@ function fallbackMenuFromHit(hit, ownedIngredients) {
   const difficulty = content.match(/난이도는\s*(쉬움|보통|어려움)/);
   return {
     name: hit.recipe_name,
-    cuisine: hit.cuisine || [],
+    cuisine: hit.cuisine || inferCuisine(hit.recipe_name, content),
     description: content.split(/[.。]/)[0].trim(),
     recipe: content.split(/[.。]/).map(step => step.trim()).filter(Boolean),
     cookTime: cookTime ? `${cookTime[1]}분` : '시간 정보 없음',
@@ -146,7 +162,9 @@ module.exports = async function handler(req, res) {
     const enrichedHits = cuisineHits.map(hit => ({
       ...hit,
       requiredIngredients: extractRecipeIngredients(hit.content),
-      cuisine: RECIPE_CUISINES[hit.recipe_name] || []
+      cuisine: Array.isArray(hit.metadata?.cuisine) && hit.metadata.cuisine.length
+        ? hit.metadata.cuisine
+        : inferCuisine(hit.recipe_name, hit.content)
     }));
 
     const answer = await openai('chat/completions', {
@@ -160,14 +178,16 @@ module.exports = async function handler(req, res) {
     const result = JSON.parse(answer.choices?.[0]?.message?.content || '{}');
     if (!Array.isArray(result.menus) || result.menus.length === 0) throw new Error('Invalid RAG response');
     const hitByName = new Map(enrichedHits.map(hit => [hit.recipe_name, hit]));
+    const normalizedMenuName = value => String(value || '').replace(/\s+/g, '');
+    const findHit = name => hitByName.get(name) || enrichedHits.find(hit => normalizedMenuName(hit.recipe_name) === normalizedMenuName(name));
     const menus = result.menus.slice(0, 3).map(menu => {
-      const hit = hitByName.get(menu.name);
+      const hit = findHit(menu.name);
       const requiredIngredients = hit?.requiredIngredients?.length
         ? hit.requiredIngredients
         : (Array.isArray(menu.ingredients) ? menu.ingredients : []);
       return {
         ...menu,
-        cuisine: hit?.cuisine || [],
+        cuisine: hit?.cuisine || inferCuisine(menu.name, menu.description),
         ingredients: requiredIngredients,
         missingIngredients: calculateMissingIngredients(body.ingredients, requiredIngredients)
       };
