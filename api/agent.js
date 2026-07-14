@@ -85,7 +85,7 @@ function promptFor({ ingredients, filters, exclude, hits }) {
 음식 종류: ${filters.cuisines?.join(', ') || '전체'}
 제외할 직전 메뉴: ${exclude.join(', ') || '없음'}
 
-아래 검색 문서에 있는 레시피를 근거로 서로 다른 메뉴를 최대 3개 추천하세요. 검색 문서에 없는 조리법을 새로 지어내지 말고, 재료가 부족하면 missingIngredients에 표시하세요. 제외 메뉴는 반환하지 마세요. 반드시 JSON 객체 하나만 반환하세요.
+아래 검색 문서에 있는 레시피를 근거로 정확히 3개 추천하세요. 선택한 음식 종류가 있으면 해당 종류를 우선하고, 3개가 부족할 때만 다른 음식 종류를 보충하세요. 검색 문서에 없는 조리법을 새로 지어내지 말고, 재료가 부족하면 missingIngredients에 표시하세요. 제외 메뉴는 반환하지 마세요. 반드시 JSON 객체 하나만 반환하세요.
 형식: {"menus":[{"name":"메뉴명","description":"짧은 설명","recipe":["조리 단계"],"cookTime":"조리 시간","difficulty":"쉬움|보통|어려움","ingredients":["필요 재료"],"missingIngredients":["추가 재료"]}]}
 
 <검색 문서>
@@ -173,22 +173,24 @@ module.exports = async function handler(req, res) {
     const exclude = Array.isArray(body.exclude) ? body.exclude.filter(item => typeof item === 'string').slice(0, 20) : [];
     const query = `${body.ingredients.join(', ')} ${cuisines.join(', ')} ${filters.time || ''} ${filters.difficulty || ''} ${filters.diet || ''}`;
     const queryEmbedding = await embed(query, config.openai);
-    let hits = await searchRecipes(queryEmbedding, config, cuisines);
-    // 같은 레시피의 여러 청크가 후보 수를 차지하지 않도록 메뉴 단위로 중복을 제거합니다.
-    const uniqueHits = [...new Map(hits.map(hit => [hit.recipe_name, hit])).values()];
-    let cuisineHits = filterByCuisine(uniqueHits, cuisines);
-    // 구형 RPC가 아직 배포된 경우에도 카테고리 전용 질의로 후보 3개를 추가 확보합니다.
-    if (cuisines.length && cuisineHits.length < 3) {
-      const cuisineQuery = `${cuisines.join(', ')} 대표 요리 레시피`;
-      const cuisineQueryHits = await searchRecipes(await embed(cuisineQuery, config.openai), config, cuisines);
-      hits = [...hits, ...cuisineQueryHits];
-      const mergedHits = [...new Map(hits.map(hit => [hit.recipe_name, hit])).values()];
-      cuisineHits = filterByCuisine(mergedHits, cuisines);
+    const selectedHits = await searchRecipes(queryEmbedding, config, cuisines);
+    const selectedUniqueHits = [...new Map(selectedHits.map(hit => [hit.recipe_name, hit])).values()];
+    let preferredHits = filterByCuisine(selectedUniqueHits, cuisines);
+    let allHits = selectedUniqueHits;
+
+    // 선택한 카테고리만으로 3개가 안 되면 전체 카테고리에서 추가 후보를 확보합니다.
+    if (cuisines.length && preferredHits.length < 3) {
+      const allCategoryHits = await searchRecipes(queryEmbedding, config, []);
+      allHits = [...new Map([...selectedUniqueHits, ...allCategoryHits].map(hit => [hit.recipe_name, hit])).values()];
+      preferredHits = filterByCuisine(allHits, cuisines);
     }
-    if (!hits.length) return res.status(404).json({ error: '관련 레시피를 찾지 못했습니다.' });
-    if (cuisines.length && !cuisineHits.length) {
-      return res.status(200).json({ menus: [], cuisines, message: '선택하신 음식 종류에 맞는 레시피를 찾지 못했어요. 다른 재료나 음식 종류를 선택해보세요.' });
-    }
+    if (!allHits.length) return res.status(404).json({ error: '관련 레시피를 찾지 못했습니다.' });
+
+    // 선택 카테고리를 앞에 배치하고 부족한 수는 다른 카테고리로 채웁니다.
+    const cuisineHits = cuisines.length
+      ? [...preferredHits, ...allHits.filter(hit => !preferredHits.some(item => item.recipe_name === hit.recipe_name))]
+      : allHits;
+    const usedFallbackCuisine = cuisines.length && preferredHits.length < 3;
     const enrichedHits = cuisineHits.map(hit => ({
       ...hit,
       requiredIngredients: extractRecipeIngredients(hit.content),
@@ -206,15 +208,17 @@ module.exports = async function handler(req, res) {
       ]
     }, config.openai);
     const result = JSON.parse(answer.choices?.[0]?.message?.content || '{}');
-    if (!Array.isArray(result.menus) || result.menus.length === 0) throw new Error('Invalid RAG response');
+    const generatedMenus = Array.isArray(result.menus) ? result.menus : [];
     const hitByName = new Map(enrichedHits.map(hit => [hit.recipe_name, hit]));
     const normalizedMenuName = value => String(value || '').replace(/\s+/g, '');
     const findHit = name => hitByName.get(name) || enrichedHits.find(hit => normalizedMenuName(hit.recipe_name) === normalizedMenuName(name));
     const excludedNames = new Set(exclude);
+    const seenGeneratedNames = new Set();
     // 모델이 검색 문서에 없는 이름이나 선택하지 않은 카테고리를 반환하지 못하게 합니다.
-    const menus = result.menus.map(menu => {
+    const menus = generatedMenus.map(menu => {
       const hit = findHit(menu.name);
-      if (!hit || excludedNames.has(hit.recipe_name)) return null;
+      if (!hit || excludedNames.has(hit.recipe_name) || seenGeneratedNames.has(hit.recipe_name)) return null;
+      seenGeneratedNames.add(hit.recipe_name);
       const requiredIngredients = hit?.requiredIngredients?.length
         ? hit.requiredIngredients
         : (Array.isArray(menu.ingredients) ? menu.ingredients : []);
@@ -225,6 +229,8 @@ module.exports = async function handler(req, res) {
         missingIngredients: calculateMissingIngredients(body.ingredients, requiredIngredients)
       };
     }).filter(Boolean);
+    const isPreferredMenu = menu => !cuisines.length || (menu.cuisine || []).some(cuisine => cuisines.includes(cuisine));
+    menus.sort((left, right) => Number(!isPreferredMenu(right)) - Number(!isPreferredMenu(left)));
     const seenNames = new Set(menus.map(menu => menu.name));
     for (const hit of enrichedHits) {
       if (menus.length >= 3) break;
@@ -232,20 +238,12 @@ module.exports = async function handler(req, res) {
       menus.push(fallbackMenuFromHit(hit, body.ingredients));
       seenNames.add(hit.recipe_name);
     }
-    if (menus.length < 3) {
-      return res.status(409).json({
-        menus: [],
-        cuisines,
-        message: cuisines.length
-          ? '선택하신 음식 종류와 재료 조건을 만족하는 메뉴 3개를 준비하지 못했어요. 다른 재료나 음식 종류를 선택해보세요.'
-          : '조건을 만족하는 메뉴 3개를 준비하지 못했어요. 재료나 필터를 바꿔 다시 시도해보세요.'
-      });
-    }
+    if (menus.length < 3) throw new Error('3개의 추천 후보를 확보하지 못했습니다.');
     return res.status(200).json({
       menus: menus.slice(0, 3),
       cuisines,
       sources: cuisineHits.map(hit => hit.recipe_name),
-      message: menus.length < 3 ? '추가로 추천할 수 있는 다른 메뉴가 부족합니다.' : undefined
+      message: usedFallbackCuisine ? '선택한 음식 종류가 부족해 다른 음식 종류의 메뉴를 함께 추천했어요.' : undefined
     });
   } catch (error) {
     console.error(error.message);
