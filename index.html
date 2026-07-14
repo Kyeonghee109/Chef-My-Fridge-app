@@ -95,8 +95,8 @@
     .recipe-list li { display:grid; grid-template-columns:32px 1fr; gap:12px; padding:13px 0; border-bottom:1px solid var(--line); line-height:1.6; }
     .recipe-list li::before { counter-increment:steps; content:counter(steps); display:grid; place-items:center; width:28px; height:28px; border-radius:50%; color:var(--green); background:var(--mint); font-weight:800; }
     .disclaimer { margin-top:28px; padding:13px 15px; border-radius:12px; color:var(--muted); background:var(--cream); font-size:.82rem; }
-    .filters { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:25px; padding-top:22px; border-top:1px solid var(--line); }
-    .cuisine-section { margin-top:24px; }
+    .filters { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:25px; padding-top:22px; }
+    .cuisine-section { margin-top:25px; padding-top:22px; border-top:1px solid var(--line); }
     .cuisine-label { margin:0 0 10px; color:var(--muted); font-size:.82rem; font-weight:700; }
     .field label { display:block; margin-bottom:7px; color:var(--muted); font-size:.82rem; font-weight:700; }
     footer { margin-top:22px; color:var(--muted); font-size:.8rem; text-align:center; }
@@ -124,9 +124,9 @@
       <div class="panel">
         <div class="panel-head"><div><p class="eyebrow">01 / Ingredients</p><h2>냉장고를 열어볼까요?</h2></div><p class="muted">재료를 하나 이상 골라주세요.</p></div>
         <div class="tag-grid" id="ingredientGrid"></div>
-        <div class="cuisine-section"><p class="cuisine-label">좋아하는 음식 종류를 골라주세요 (선택)</p><div class="tag-grid" id="cuisineGrid"></div></div>
         <form class="custom-form" id="customForm"><input id="customInput" aria-label="기타 재료" placeholder="기타 재료를 쉼표로 입력해보세요 (예: 두부, 대파)"><button class="button secondary" type="submit">재료 추가</button></form>
         <div class="selected" id="selectedIngredients" aria-live="polite"></div>
+        <div class="cuisine-section"><p class="cuisine-label">좋아하는 음식 종류를 골라주세요 (선택)</p><div class="tag-grid" id="cuisineGrid"></div></div>
         <div class="filters">
           <div class="field"><label for="timeFilter">조리 시간</label><select id="timeFilter"><option value="">상관없음</option><option>15분 이내</option><option>30분 이내</option><option>1시간 이내</option></select></div>
           <div class="field"><label for="difficultyFilter">난이도</label><select id="difficultyFilter"><option value="">상관없음</option><option>쉬움</option><option>보통</option><option>어려움</option></select></div>
