@@ -68,6 +68,7 @@
     .status { min-height:24px; color:var(--muted); }
     .error { margin:16px 0 0; color:var(--danger); font-weight:650; }
     .screen[hidden] { display:none; }
+    #resultsScreen:not([hidden]) { min-height:100vh; display:flex; flex-direction:column; justify-content:center; }
     .results-head { display:flex; justify-content:space-between; align-items:end; gap:20px; margin-bottom:24px; }
     .card-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
     .menu-card { display:flex; flex-direction:column; min-height:270px; padding:22px; border:1px solid var(--line); border-radius:16px; background:var(--paper); box-shadow:0 6px 18px #292a2707; }
@@ -171,7 +172,7 @@
     const el = (tag, className, content) => { const node=document.createElement(tag); if(className) node.className=className; if(content !== undefined) node.append(text(content)); return node; };
     const normalized = (value) => value.trim().replace(/\s+/g,' ').toLocaleLowerCase('ko-KR');
 
-    function showScreen(screen) { state.screen=screen; Object.entries(screens).forEach(([name,node]) => { node.hidden=name!==screen; }); window.scrollTo({top:0,behavior:'smooth'}); }
+    function showScreen(screen) { state.screen=screen; hero.hidden=screen!=='ingredients'; Object.entries(screens).forEach(([name,node]) => { node.hidden=name!==screen; }); window.scrollTo({top:0,behavior:'smooth'}); }
     function setStatus(message='') { $('#status').textContent=message; }
     function setError(message='', target='#ingredientError') { $('#ingredientError').textContent=''; $('#resultError').textContent=''; if(message) $(target).textContent=message; state.error=message; }
     function renderTags() { const grid=$('#ingredientGrid'); grid.replaceChildren(); INGREDIENTS.forEach((name,index) => { const button=el('button','tag',name); button.style.setProperty('--chip-delay',`${index*.08}s`); if(ingredientsScreen.dataset.chipsEntered) button.classList.add('chip-entered'); button.type='button'; button.classList.toggle('selected',state.selectedIngredients.some(item=>normalized(item)===normalized(name))); button.setAttribute('aria-pressed',String(button.classList.contains('selected'))); button.addEventListener('click',()=>toggleIngredient(name)); grid.append(button); }); }
