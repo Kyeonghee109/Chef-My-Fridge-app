@@ -42,6 +42,7 @@
     @keyframes float-salad { 50% { transform:translateY(-5px) rotate(-2deg); } }
     .story-selection .tag { opacity:0; translate:0 24px; scale:.96; }
     .story-selection.is-visible .tag { animation:chip-in .5s cubic-bezier(.22,1,.36,1) var(--chip-delay) both; }
+    .story-selection .tag.chip-entered { opacity:1; translate:0 0; scale:1; animation:none; }
     @keyframes chip-in { to { opacity:1; translate:0 0; scale:1; } }
     @media (prefers-reduced-motion:reduce) { .hero-copy h1, .hero-copy > p:last-child, .hero-food, .hero-food-glyph, .story-selection .tag { animation:none; opacity:1; translate:0 0; scale:1; } .hero-food, .hero { transition:none; } }
     .panel { padding:28px; border:1px solid var(--line); border-radius:18px; background:var(--paper); box-shadow:0 8px 24px #292a2709; }
@@ -157,7 +158,7 @@
     const updateStory = () => { storyFrame=0; const progress=Math.min(Math.max(window.scrollY/(window.innerHeight*.85),0),1); hero.style.setProperty('--hero-opacity',(1-progress).toFixed(3)); hero.style.setProperty('--hero-scale',(1-progress*.04).toFixed(3)); hero.style.setProperty('--hero-y',`${(-progress*60).toFixed(1)}px`); };
     window.addEventListener('scroll',()=>{ if(!storyFrame) storyFrame=requestAnimationFrame(updateStory); },{passive:true});
     updateStory();
-    new IntersectionObserver(([entry])=>ingredientsScreen.classList.toggle('is-visible',entry.isIntersecting),{threshold:.18}).observe(ingredientsScreen);
+    new IntersectionObserver(([entry])=>{ if(entry.isIntersecting){ ingredientsScreen.classList.add('is-visible'); ingredientsScreen.dataset.chipsEntered='true'; } },{threshold:.18}).observe(ingredientsScreen);
     const heroMark = $('#heroMark');
     const heroFoods = [...heroMark.querySelectorAll('.hero-food')];
     if (!window.matchMedia('(max-width:768px)').matches) {
@@ -173,8 +174,8 @@
     function showScreen(screen) { state.screen=screen; Object.entries(screens).forEach(([name,node]) => { node.hidden=name!==screen; }); window.scrollTo({top:0,behavior:'smooth'}); }
     function setStatus(message='') { $('#status').textContent=message; }
     function setError(message='', target='#ingredientError') { $('#ingredientError').textContent=''; $('#resultError').textContent=''; if(message) $(target).textContent=message; state.error=message; }
-    function renderTags() { const grid=$('#ingredientGrid'); grid.replaceChildren(); INGREDIENTS.forEach((name,index) => { const button=el('button','tag',name); button.style.setProperty('--chip-delay',`${index*.08}s`); button.type='button'; button.classList.toggle('selected',state.selectedIngredients.some(item=>normalized(item)===normalized(name))); button.setAttribute('aria-pressed',String(button.classList.contains('selected'))); button.addEventListener('click',()=>toggleIngredient(name)); grid.append(button); }); }
-    function renderCuisineTags() { const grid=$('#cuisineGrid'); grid.replaceChildren(); CUISINES.forEach((name,index) => { const button=el('button','tag',name); button.style.setProperty('--chip-delay',`${(INGREDIENTS.length+index)*.08}s`); button.type='button'; button.classList.toggle('selected',state.selectedCuisines.includes(name)); button.setAttribute('aria-pressed',String(state.selectedCuisines.includes(name))); button.addEventListener('click',()=>toggleCuisine(name)); grid.append(button); }); }
+    function renderTags() { const grid=$('#ingredientGrid'); grid.replaceChildren(); INGREDIENTS.forEach((name,index) => { const button=el('button','tag',name); button.style.setProperty('--chip-delay',`${index*.08}s`); if(ingredientsScreen.dataset.chipsEntered) button.classList.add('chip-entered'); button.type='button'; button.classList.toggle('selected',state.selectedIngredients.some(item=>normalized(item)===normalized(name))); button.setAttribute('aria-pressed',String(button.classList.contains('selected'))); button.addEventListener('click',()=>toggleIngredient(name)); grid.append(button); }); }
+    function renderCuisineTags() { const grid=$('#cuisineGrid'); grid.replaceChildren(); CUISINES.forEach((name,index) => { const button=el('button','tag',name); button.style.setProperty('--chip-delay',`${(INGREDIENTS.length+index)*.08}s`); if(ingredientsScreen.dataset.chipsEntered) button.classList.add('chip-entered'); button.type='button'; button.classList.toggle('selected',state.selectedCuisines.includes(name)); button.setAttribute('aria-pressed',String(state.selectedCuisines.includes(name))); button.addEventListener('click',()=>toggleCuisine(name)); grid.append(button); }); }
     function renderSelected() { const wrap=$('#selectedIngredients'); wrap.replaceChildren(); if(!state.selectedIngredients.length) { wrap.append(el('span','muted','선택한 재료가 여기에 표시됩니다.')); return; } state.selectedIngredients.forEach(name=>{ const chip=el('span','chip'); chip.append(text(name)); const remove=el('button','', '×'); remove.type='button'; remove.setAttribute('aria-label',`${name} 삭제`); remove.addEventListener('click',()=>removeIngredient(name)); chip.append(remove); wrap.append(chip); }); }
     function renderIngredients() { renderTags(); renderCuisineTags(); renderSelected(); }
     function addIngredients(values) { const existing=new Set(state.selectedIngredients.map(normalized)); values.map(value=>value.trim()).filter(Boolean).forEach(value=>{ const key=normalized(value); if(!existing.has(key)){ state.selectedIngredients.push(value); existing.add(key); } }); renderIngredients(); }
