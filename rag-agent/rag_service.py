@@ -61,6 +61,8 @@ class RagService:
 
     def recommend(self, ingredients: list[str], top_k: int, cuisines: list[str] | None = None) -> list[Recommendation]:
         """후보 레시피를 검색하고 재료 매칭 결과를 Claude의 구조화된 추천으로 변환합니다."""
+        # 호출 경로가 달라도 서비스는 항상 3개 후보를 준비한 뒤 반환합니다.
+        top_k = 3
         cuisines = cuisines or []
         query = self.query_from_ingredients(ingredients)
         # 상위 3개만 검색하면 재료가 실제로 겹치는 레시피가 뒤로 밀릴 수 있으므로 충분히 넓게 검색합니다.
@@ -81,6 +83,8 @@ class RagService:
         if not ranked_candidates:
             return []
         selected_candidates = select_diverse_candidates(ranked_candidates, top_k, cuisines_selected=bool(cuisines))
+        if len(selected_candidates) < 3:
+            return []
 
         context = json.dumps(
             [

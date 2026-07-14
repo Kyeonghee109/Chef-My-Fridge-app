@@ -1,16 +1,4 @@
-create extension if not exists vector;
-
-create table if not exists public.recipe_chunks (
-  id bigint generated always as identity primary key,
-  recipe_name text not null,
-  content text not null,
-  metadata jsonb not null default '{}'::jsonb,
-  embedding vector(1536) not null
-);
-
-create index if not exists recipe_chunks_embedding_idx
-  on public.recipe_chunks using hnsw (embedding vector_cosine_ops);
-
+-- 선택한 음식 종류를 벡터 검색 단계에서 먼저 적용해 관련 카테고리 후보를 보장합니다.
 drop function if exists public.match_recipe_chunks(vector, float, integer);
 
 create or replace function public.match_recipe_chunks(

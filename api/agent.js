@@ -42,7 +42,7 @@ async function embed(text, key) {
   return payload.data[0].embedding;
 }
 
-async function searchRecipes(queryEmbedding, config) {
+async function searchRecipes(queryEmbedding, config, cuisines = []) {
   const response = await fetch(`${config.supabaseUrl}/rest/v1/rpc/match_recipe_chunks`, {
     method: 'POST',
     headers: {
@@ -50,9 +50,27 @@ async function searchRecipes(queryEmbedding, config) {
       apikey: config.supabaseKey,
       authorization: `Bearer ${config.supabaseKey}`
     },
-    body: JSON.stringify({ query_embedding: queryEmbedding, match_threshold: 0.18, match_count: 50 })
+    body: JSON.stringify({
+      query_embedding: queryEmbedding,
+      match_threshold: 0.05,
+      match_count: 200,
+      selected_cuisines: cuisines
+    })
   });
-  if (!response.ok) throw new Error(`Supabase search failed (${response.status})`);
+  if (!response.ok) {
+    // 새 RPC 마이그레이션 전에도 동작하도록 기존 3개 인자 RPC로 한 번 더 시도합니다.
+    const legacyResponse = await fetch(`${config.supabaseUrl}/rest/v1/rpc/match_recipe_chunks`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        apikey: config.supabaseKey,
+        authorization: `Bearer ${config.supabaseKey}`
+      },
+      body: JSON.stringify({ query_embedding: queryEmbedding, match_threshold: 0.05, match_count: 1000 })
+    });
+    if (!legacyResponse.ok) throw new Error(`Supabase search failed (${legacyResponse.status})`);
+    return legacyResponse.json();
+  }
   return response.json();
 }
 
@@ -152,10 +170,12 @@ module.exports = async function handler(req, res) {
     const body = req.body;
     const filters = body.filters && typeof body.filters === 'object' ? body.filters : {};
     const exclude = Array.isArray(body.exclude) ? body.exclude.filter(item => typeof item === 'string').slice(0, 20) : [];
-    const query = `${body.ingredients.join(', ')} ${filters.time || ''} ${filters.difficulty || ''} ${filters.diet || ''}`;
-    const hits = await searchRecipes(await embed(query, config.openai), config);
+    const query = `${body.ingredients.join(', ')} ${cuisines.join(', ')} ${filters.time || ''} ${filters.difficulty || ''} ${filters.diet || ''}`;
+    const hits = await searchRecipes(await embed(query, config.openai), config, cuisines);
     if (!hits.length) return res.status(404).json({ error: '관련 레시피를 찾지 못했습니다.' });
-    const cuisineHits = filterByCuisine(hits, cuisines);
+    // 같은 레시피의 여러 청크가 후보 수를 차지하지 않도록 메뉴 단위로 중복을 제거합니다.
+    const uniqueHits = [...new Map(hits.map(hit => [hit.recipe_name, hit])).values()];
+    const cuisineHits = filterByCuisine(uniqueHits, cuisines);
     if (cuisines.length && !cuisineHits.length) {
       return res.status(200).json({ menus: [], cuisines, message: '선택하신 음식 종류에 맞는 레시피를 찾지 못했어요. 다른 재료나 음식 종류를 선택해보세요.' });
     }
@@ -180,8 +200,11 @@ module.exports = async function handler(req, res) {
     const hitByName = new Map(enrichedHits.map(hit => [hit.recipe_name, hit]));
     const normalizedMenuName = value => String(value || '').replace(/\s+/g, '');
     const findHit = name => hitByName.get(name) || enrichedHits.find(hit => normalizedMenuName(hit.recipe_name) === normalizedMenuName(name));
-    const menus = result.menus.slice(0, 3).map(menu => {
+    const excludedNames = new Set(exclude);
+    // 모델이 검색 문서에 없는 이름이나 선택하지 않은 카테고리를 반환하지 못하게 합니다.
+    const menus = result.menus.map(menu => {
       const hit = findHit(menu.name);
+      if (!hit || excludedNames.has(hit.recipe_name)) return null;
       const requiredIngredients = hit?.requiredIngredients?.length
         ? hit.requiredIngredients
         : (Array.isArray(menu.ingredients) ? menu.ingredients : []);
@@ -191,17 +214,25 @@ module.exports = async function handler(req, res) {
         ingredients: requiredIngredients,
         missingIngredients: calculateMissingIngredients(body.ingredients, requiredIngredients)
       };
-    });
+    }).filter(Boolean);
     const seenNames = new Set(menus.map(menu => menu.name));
-    const excludedNames = new Set(exclude);
     for (const hit of enrichedHits) {
       if (menus.length >= 3) break;
       if (seenNames.has(hit.recipe_name) || excludedNames.has(hit.recipe_name)) continue;
       menus.push(fallbackMenuFromHit(hit, body.ingredients));
       seenNames.add(hit.recipe_name);
     }
+    if (menus.length < 3) {
+      return res.status(409).json({
+        menus: [],
+        cuisines,
+        message: cuisines.length
+          ? '선택하신 음식 종류와 재료 조건을 만족하는 메뉴 3개를 준비하지 못했어요. 다른 재료나 음식 종류를 선택해보세요.'
+          : '조건을 만족하는 메뉴 3개를 준비하지 못했어요. 재료나 필터를 바꿔 다시 시도해보세요.'
+      });
+    }
     return res.status(200).json({
-      menus,
+      menus: menus.slice(0, 3),
       cuisines,
       sources: cuisineHits.map(hit => hit.recipe_name),
       message: menus.length < 3 ? '추가로 추천할 수 있는 다른 메뉴가 부족합니다.' : undefined

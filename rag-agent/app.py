@@ -18,7 +18,8 @@ app = FastAPI(title="Fridge Recipe RAG Agent", version="1.0.0")
 
 class RecommendRequest(BaseModel):
     ingredients: list[str] = Field(min_length=1, max_length=50)
-    top_k: int = Field(default=3, ge=1, le=10)
+    # 서비스 정책상 추천 결과는 항상 3개 단위로만 제공합니다.
+    top_k: int = Field(default=3, ge=3, le=3)
     cuisines: list[str] = Field(default_factory=list, max_length=5)
 
     @field_validator("ingredients")
