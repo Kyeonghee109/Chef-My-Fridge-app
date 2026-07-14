@@ -15,8 +15,8 @@
     .brand { color:var(--green); font-size:1.1rem; font-weight:850; letter-spacing:-.03em; }
     .brand span { display:inline-block; margin-right:8px; transform:rotate(-12deg); }
     .eyebrow { margin:0 0 12px; color:var(--green); font-size:.78rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
-    h1 { max-width:760px; margin:0; font-size:clamp(2.35rem,7vw,5.8rem); line-height:.98; letter-spacing:-.08em; }
-    h2 { margin:0; font-size:clamp(1.65rem,3vw,2.6rem); letter-spacing:-.06em; }
+    h1 { max-width:760px; margin:0; font-size:4.5rem; line-height:.98; letter-spacing:-.08em; }
+    h2 { margin:0; font-size:2.2rem; letter-spacing:-.06em; }
     h3 { margin:0; font-size:1.2rem; letter-spacing:-.035em; }
     p { line-height:1.7; }
     .hero { display:grid; grid-template-columns:1.1fr .9fr; align-items:end; gap:48px; margin-bottom:42px; }
@@ -26,9 +26,10 @@
     .panel-head { display:flex; justify-content:space-between; align-items:end; gap:20px; margin-bottom:22px; }
     .muted { color:var(--muted); }
     .tag-grid { display:flex; flex-wrap:wrap; gap:10px; }
-    .tag { padding:10px 15px; border:1px solid var(--line); border-radius:999px; color:var(--ink); background:#fff; transition:.18s ease; }
-    .tag:hover, .tag:focus-visible { border-color:var(--green); transform:translateY(-1px); }
-    .tag.selected { border-color:var(--green); color:#fff; background:var(--green); }
+    .tag { display:inline-flex; flex:0 0 88px; align-items:center; justify-content:center; width:88px; height:44px; box-sizing:border-box; margin:0; padding:0; border:1px solid var(--line); border-radius:999px; color:var(--ink); background:#fff; font:400 16px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; transition:background-color .18s ease,color .18s ease,border-color .18s ease; white-space:nowrap; vertical-align:top; appearance:none; position:static; transform:none !important; }
+    .tag:hover, .tag:focus, .tag:focus-visible, .tag:active { border-color:var(--green); outline:none; transform:none !important; }
+    .tag:focus-visible { box-shadow:0 0 0 3px #216b5120; }
+    .tag.selected { box-sizing:border-box; width:88px; height:44px; margin:0; padding:0; border-width:1px; border-color:var(--green); color:#fff; background:var(--green); font-weight:400; position:static; transform:none !important; }
     .custom-form { display:flex; gap:10px; margin-top:22px; }
     input, select { width:100%; min-width:0; padding:13px 15px; border:1px solid var(--line); border-radius:13px; color:var(--ink); background:#fff; outline:none; }
     input:focus, select:focus { border-color:var(--green); box-shadow:0 0 0 3px #216b5120; }
@@ -65,7 +66,7 @@
     .filters { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:25px; padding-top:22px; border-top:1px solid var(--line); }
     .field label { display:block; margin-bottom:7px; color:var(--muted); font-size:.82rem; font-weight:700; }
     footer { margin-top:22px; color:var(--muted); font-size:.8rem; text-align:center; }
-    @media (max-width:760px) { .app { width:min(100% - 22px,560px); padding-top:18px; } header { margin-bottom:32px; } .hero, .detail-layout { grid-template-columns:1fr; gap:22px; } .hero-mark { min-height:140px; font-size:4.5rem; } .panel { padding:20px; border-radius:22px; } .card-grid, .filters { grid-template-columns:1fr; } .results-head, .panel-head { align-items:start; flex-direction:column; } .custom-form { flex-direction:column; } }
+    @media (max-width:760px) { .app { width:min(100% - 22px,560px); padding-top:18px; } header { margin-bottom:32px; } h1 { font-size:2.8rem; } h2 { font-size:1.8rem; } .hero, .detail-layout { grid-template-columns:1fr; gap:22px; } .hero-mark { min-height:140px; font-size:4.5rem; } .panel { padding:20px; border-radius:22px; } .card-grid, .filters { grid-template-columns:1fr; } .results-head, .panel-head { align-items:start; flex-direction:column; } .custom-form { flex-direction:column; } }
   </style>
 </head>
 <body>
@@ -74,7 +75,7 @@
 
     <section class="hero">
       <div><p class="eyebrow">Cook with what you have</p><h1>오늘 뭐먹지? 🐰🍳</h1><p class="hero-copy">가지고 있는 재료를 고르면, 지금 만들기 좋은 메뉴와 레시피를 찾아드릴게요.</p></div>
-      <div class="hero-mark" aria-hidden="true">🥕</div>
+      <div class="hero-mark" aria-hidden="true">🧊</div>
     </section>
 
     <section class="screen" id="ingredientsScreen">
@@ -88,7 +89,6 @@
           <div class="field"><label for="difficultyFilter">난이도</label><select id="difficultyFilter"><option value="">상관없음</option><option>쉬움</option><option>보통</option><option>어려움</option></select></div>
           <div class="field"><label for="dietFilter">식이 제한</label><input id="dietFilter" placeholder="예: 땅콩 알레르기"></div>
         </div>
-        <div class="field" style="margin-top:18px"><label for="apiKeyInput">OpenAI API 키 <span class="muted">(이 브라우저에서만 사용)</span></label><input id="apiKeyInput" type="password" autocomplete="off" placeholder="sk-proj-..."><p class="muted" style="margin:7px 0 0;font-size:.78rem">키는 저장하지 않습니다. 공개 웹사이트에서는 키를 입력하지 마세요.</p></div>
         <div class="actions"><div class="status" id="status" role="status" aria-live="polite"></div><button class="button" id="recommendButton" type="button">메뉴 추천받기 →</button></div>
         <p class="error" id="ingredientError" role="alert"></p>
       </div>
@@ -107,8 +107,7 @@
   </main>
   <script>
     const INGREDIENTS = ['계란','두부','닭가슴살','돼지고기','소고기','참치캔','햄','베이컨','김치','양파','대파','마늘','감자','당근','애호박','버섯','시금치','브로콜리','토마토','양배추','오이','고추','밥','파스타면','우유','치즈','밀가루','간장','고추장','참기름'];
-    const API_URL = 'https://api.openai.com/v1/chat/completions';
-    const state = { screen:'ingredients', selectedIngredients:[], menus:[], currentMenu:null, previousMenuNames:[], loading:false, error:'', apiKey:'' };
+    const state = { screen:'ingredients', selectedIngredients:[], menus:[], currentMenu:null, previousMenuNames:[], loading:false, error:'', controller:null };
     const $ = (selector) => document.querySelector(selector);
     const screens = { ingredients:$('#ingredientsScreen'), results:$('#resultsScreen'), detail:$('#detailScreen') };
     const text = (value) => document.createTextNode(String(value ?? ''));
@@ -125,17 +124,17 @@
     function toggleIngredient(name) { const index=state.selectedIngredients.findIndex(item=>normalized(item)===normalized(name)); if(index===-1) state.selectedIngredients.push(name); else state.selectedIngredients.splice(index,1); setError(); renderIngredients(); }
     function removeIngredient(name) { state.selectedIngredients=state.selectedIngredients.filter(item=>normalized(item)!==normalized(name)); renderIngredients(); }
     function currentFilters() { return { time:$('#timeFilter').value, difficulty:$('#difficultyFilter').value, diet:$('#dietFilter').value.trim() }; }
-    function buildPrompt() { const filters=currentFilters(); return `당신은 냉장고 재료 활용 요리 추천 전문가입니다.\n보유 재료: ${state.selectedIngredients.join(', ')}\n조리 시간 조건: ${filters.time || '없음'}\n난이도 조건: ${filters.difficulty || '없음'}\n식이 제한 및 알레르기: ${filters.diet || '없음'}\n직전 메뉴(반드시 제외): ${state.previousMenuNames.join(', ') || '없음'}\n\n보유 재료만으로 가능한 메뉴를 우선해 서로 다른 메뉴 3개를 추천하세요. 부족한 재료는 missingIngredients에 넣으세요. 식이 제한에 위배되는 메뉴는 제외하세요. JSON 객체 하나만 반환하고, 반드시 {"menus":[{"name":"메뉴명","description":"짧은 설명","recipe":["조리 단계"],"cookTime":"조리 시간","difficulty":"쉬움|보통|어려움","ingredients":["필요 재료"],"missingIngredients":["추가 재료"]}]} 형식을 지키세요.`; }
     function extractJson(raw) { const start=raw.indexOf('{'); const end=raw.lastIndexOf('}'); if(start===-1 || end<=start) throw new Error('JSON 객체를 찾을 수 없습니다.'); const parsed=JSON.parse(raw.slice(start,end+1)); return Array.isArray(parsed)?parsed:parsed.menus; }
     function validateMenus(menus) { if(!Array.isArray(menus) || menus.length<1 || menus.length>3) throw new Error('추천 메뉴 형식이 올바르지 않습니다.'); menus.forEach(menu=>{ if(!menu || ['name','description','recipe','cookTime','difficulty'].some(key=>!menu[key]) || !Array.isArray(menu.recipe) || !menu.recipe.length) throw new Error('레시피 정보가 부족합니다.'); }); return menus; }
-    async function requestMenus() { const requestScreen=state.screen; const errorTarget=requestScreen==='results'?'#resultError':'#ingredientError'; state.apiKey=$('#apiKeyInput').value.trim(); if(!state.selectedIngredients.length){ setError('재료를 하나 이상 선택해주세요.',errorTarget); return; } if(!state.apiKey){ setError('OpenAI API 키를 입력해주세요.',errorTarget); $('#apiKeyInput').focus(); return; } state.loading=true; setError(); if(requestScreen==='results') $('#resultError').textContent='다른 메뉴를 찾는 중…'; else setStatus('냉장고 속 재료를 살펴보는 중…'); $('#recommendButton').disabled=true; $('#anotherButton').disabled=true; try { const response=await fetch(API_URL,{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${state.apiKey}`},body:JSON.stringify({model:'gpt-4o-mini',response_format:{type:'json_object'},messages:[{role:'system',content:'You return only valid JSON.'},{role:'user',content:buildPrompt()}]})}); if(!response.ok) throw new Error(`OpenAI API 요청 실패 (${response.status})`); const payload=await response.json(); const raw=payload.choices?.[0]?.message?.content||''; state.menus=validateMenus(extractJson(raw)); state.currentMenu=state.menus[0]; state.previousMenuNames.push(...state.menus.map(menu=>menu.name)); renderResults(); showScreen('results'); } catch(error) { setError(error.message||'추천을 불러오지 못했습니다. 다시 시도해주세요.',errorTarget); } finally { state.loading=false; setStatus(''); $('#recommendButton').disabled=false; $('#anotherButton').disabled=false; } }
+    function cancelRequest() { if(state.controller) state.controller.abort(); state.controller=null; state.loading=false; $('#recommendButton').disabled=false; $('#anotherButton').disabled=false; setStatus(''); }
+    async function requestMenus() { const requestScreen=state.screen; const errorTarget=requestScreen==='results'?'#resultError':'#ingredientError'; if(!state.selectedIngredients.length){ setError('재료를 하나 이상 선택해주세요.',errorTarget); return; } cancelRequest(); const controller=new AbortController(); state.controller=controller; state.loading=true; setError(); if(requestScreen==='results') $('#resultError').textContent='다른 메뉴를 찾는 중…'; else setStatus('냉장고 재료 문서를 검색하는 중…'); $('#recommendButton').disabled=true; $('#anotherButton').disabled=true; try { const response=await fetch('/api/agent',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ingredients:state.selectedIngredients,filters:currentFilters(),exclude:state.previousMenuNames}),signal:controller.signal}); if(!response.ok) throw new Error(`추천 요청 실패 (${response.status})`); const payload=await response.json(); if(controller.signal.aborted || state.controller!==controller) return; state.menus=validateMenus(payload.menus); state.currentMenu=state.menus[0]; state.previousMenuNames.push(...state.menus.map(menu=>menu.name)); setError(); renderResults(); showScreen('results'); } catch(error) { if(error.name!=='AbortError' && !controller.signal.aborted) setError(error.message||'추천을 불러오지 못했습니다. 다시 시도해주세요.',errorTarget); } finally { if(state.controller===controller) { state.controller=null; state.loading=false; setStatus(''); $('#recommendButton').disabled=false; $('#anotherButton').disabled=false; } } }
     function renderResults() { $('#resultSummary').textContent=`${state.selectedIngredients.join(', ')} 재료로 만들 수 있는 메뉴`; const grid=$('#menuGrid'); grid.replaceChildren(); state.menus.forEach(menu=>{ const card=el('article','menu-card'); card.append(el('h3','',menu.name)); card.append(el('p','',menu.description)); const meta=el('div','meta'); meta.append(el('span','',`⏱ ${menu.cookTime}`),el('span','',`난이도 ${menu.difficulty}`)); card.append(meta); const button=el('button','button','레시피 보기 →'); button.type='button'; button.addEventListener('click',()=>showDetail(menu)); card.append(button); grid.append(card); }); }
     function showDetail(menu) { state.currentMenu=menu; $('#detailName').textContent=menu.name; $('#detailDescription').textContent=menu.description; const meta=$('#detailMeta'); meta.replaceChildren(el('span','',`⏱ ${menu.cookTime}`),el('span','',`난이도 ${menu.difficulty}`)); const ingredients=$('#detailIngredients'); ingredients.replaceChildren(); (menu.ingredients||state.selectedIngredients).forEach(item=>ingredients.append(el('li','',item))); if(menu.missingIngredients?.length) { ingredients.append(el('li','muted',`추가로 필요한 재료: ${menu.missingIngredients.join(', ')}`)); } const recipe=$('#detailRecipe'); recipe.replaceChildren(); menu.recipe.forEach(step=>recipe.append(el('li','',step))); showScreen('detail'); }
-    function reset() { state.screen='ingredients'; state.selectedIngredients=[]; state.menus=[]; state.currentMenu=null; state.previousMenuNames=[]; state.error=''; state.apiKey=''; $('#customInput').value=''; $('#apiKeyInput').value=''; $('#timeFilter').value=''; $('#difficultyFilter').value=''; $('#dietFilter').value=''; setError(); setStatus(''); renderIngredients(); showScreen('ingredients'); }
+    function reset() { cancelRequest(); state.screen='ingredients'; state.selectedIngredients=[]; state.menus=[]; state.currentMenu=null; state.previousMenuNames=[]; state.error=''; $('#customInput').value=''; $('#timeFilter').value=''; $('#difficultyFilter').value=''; $('#dietFilter').value=''; setError(); setStatus(''); renderIngredients(); showScreen('ingredients'); }
     $('#customForm').addEventListener('submit',event=>{ event.preventDefault(); addIngredients($('#customInput').value.split(',')); $('#customInput').value=''; });
     $('#recommendButton').addEventListener('click',requestMenus);
     $('#anotherButton').addEventListener('click',requestMenus);
-    $('#backToIngredients').addEventListener('click',()=>showScreen('ingredients'));
+    $('#backToIngredients').addEventListener('click',()=>{ cancelRequest(); setError(); showScreen('ingredients'); });
     $('#detailBack').addEventListener('click',()=>showScreen('results'));
     $('#resetTop').addEventListener('click',reset);
     renderIngredients();
