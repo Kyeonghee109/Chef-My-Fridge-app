@@ -1,0 +1,67 @@
+# Fridge Recipe RAG Agent
+
+냉장고 재료를 입력하면 Chroma 벡터 검색과 Anthropic Claude를 이용해 레시피를 추천하는 FastAPI 서비스입니다.
+
+샘플 데이터는 한식, 양식, 중식, 일식, 분식 등 10,000개 이상의 레시피를 포함합니다. 임베딩에는 한국어 검색을 지원하는 Sentence Transformers 모델을 사용하고, 최종 추천 생성에는 `claude-sonnet-4-6`을 사용합니다.
+
+## 실행
+
+```bash
+cd rag-agent
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# .env에 ANTHROPIC_API_KEY 입력
+
+# 1. 레시피를 임베딩하고 Chroma DB에 저장합니다.
+# 기본적으로 기존 Chroma DB를 삭제하고 새로 적재합니다.
+python ingest.py
+
+# 기존 DB에 추가만 하려면 다음을 사용합니다.
+# python ingest.py --append
+
+# 2. API 서버 실행
+uvicorn app:app --reload
+```
+
+최초 `ingest.py` 실행 시 다국어 Sentence Transformers 임베딩 모델을 다운로드합니다.
+
+## API
+
+```bash
+curl -X POST http://127.0.0.1:8000/recommend \
+  -H 'content-type: application/json' \
+  -d '{"ingredients":["계란","양파","감자"],"top_k":3}'
+```
+
+```json
+{
+  "recommendations": [
+    {
+      "recipe_title": "감자채 볶음",
+      "matched_ingredients": ["감자", "양파"],
+      "missing_ingredients": ["당근", "소금", "식용유"],
+      "reason": "보유한 감자와 양파를 활용할 수 있고 조리 시간이 짧습니다."
+    }
+  ]
+}
+```
+
+`GET /health`로 API, Anthropic 키 설정, Chroma DB 준비 상태를 확인할 수 있습니다.
+
+벡터 유사도만 높고 보유 재료가 실제로 하나도 겹치지 않는 레시피는 추천에서 제외합니다. 일치하는 후보가 없으면 빈 목록과 안내 메시지를 반환합니다. Claude가 결과를 누락하거나 중복해도 검색 후보에서 결과를 보충해 가능한 경우 `top_k`개를 반환합니다.
+
+최종 추천에는 `match_count`, `match_ratio`, `coverage_ratio`, `missing_ingredients`가 포함됩니다. 벡터 검색은 넓은 1차 후보군을 만들 때만 사용하고, 최종 순위는 다음 하이브리드 점수로 재정렬합니다.
+
+```text
+final_score = (match_count * 0.5) + (match_ratio * 0.3) + (coverage_ratio * 0.2)
+```
+
+재료 정규화 동의어는 [ingredient_aliases.json](ingredient_aliases.json)에서 관리합니다.
+
+테스트:
+
+```bash
+pytest -q
+```
