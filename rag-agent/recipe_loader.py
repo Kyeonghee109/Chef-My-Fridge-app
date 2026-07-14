@@ -5,18 +5,23 @@ from pathlib import Path
 from typing import Any
 
 
+FIXED_CUISINES = {"한식", "중식", "양식", "일식", "분식"}
+
+
 def load_recipes(path: str | Path) -> list[dict[str, Any]]:
     """JSON 파일을 읽고 레시피 필수 필드와 자료형을 검증합니다."""
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(data, list):
         raise ValueError("레시피 데이터는 JSON 배열이어야 합니다.")
 
-    required = {"id", "title", "ingredients", "steps", "tags", "cook_time"}
+    required = {"id", "title", "ingredients", "steps", "tags", "cuisine", "cook_time"}
     for index, recipe in enumerate(data):
         if not isinstance(recipe, dict) or not required.issubset(recipe):
             raise ValueError(f"레시피 {index}에 필요한 필드가 없습니다: {sorted(required)}")
         if not isinstance(recipe["ingredients"], list) or not isinstance(recipe["steps"], list):
             raise ValueError(f"레시피 {index}의 ingredients와 steps는 배열이어야 합니다.")
+        if not isinstance(recipe["cuisine"], list) or not recipe["cuisine"] or not set(recipe["cuisine"]).issubset(FIXED_CUISINES):
+            raise ValueError(f"레시피 {index}의 cuisine은 고정 카테고리 배열이어야 합니다.")
     return data
 
 
@@ -27,6 +32,7 @@ def recipe_to_document(recipe: dict[str, Any]) -> str:
             f"제목: {recipe['title']}",
             f"재료: {', '.join(recipe['ingredients'])}",
             f"태그: {', '.join(recipe['tags'])}",
+            f"음식 종류: {', '.join(recipe['cuisine'])}",
             f"조리 시간: {recipe['cook_time']}분",
             f"조리법: {' '.join(recipe['steps'])}",
         ]

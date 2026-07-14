@@ -1,4 +1,9 @@
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+const CUISINES = ['한식', '중식', '양식', '일식', '분식'];
+const RECIPE_CUISINES = {
+  '계란 볶음밥': ['한식'], '김치찌개': ['한식'], '두부 구이': ['한식'],
+  '닭가슴살 채소볶음': ['한식'], '토마토 파스타': ['양식'], '감자채 볶음': ['한식']
+};
 
 const env = () => ({
   openai: process.env.OPENAI_API_KEY,
@@ -34,19 +39,20 @@ async function searchRecipes(queryEmbedding, config) {
       apikey: config.supabaseKey,
       authorization: `Bearer ${config.supabaseKey}`
     },
-    body: JSON.stringify({ query_embedding: queryEmbedding, match_threshold: 0.18, match_count: 6 })
+    body: JSON.stringify({ query_embedding: queryEmbedding, match_threshold: 0.18, match_count: 50 })
   });
   if (!response.ok) throw new Error(`Supabase search failed (${response.status})`);
   return response.json();
 }
 
 function promptFor({ ingredients, filters, exclude, hits }) {
-  const context = hits.map(hit => `- [${hit.recipe_name}] ${hit.content}`).join('\n');
+  const context = hits.map(hit => `- [${hit.recipe_name}] 필요 재료: ${(hit.requiredIngredients || []).join(', ')}\n  ${hit.content}`).join('\n');
   return `냉장고 재료 기반 레시피 추천을 수행하세요.
 보유 재료: ${ingredients.join(', ')}
 조리 시간: ${filters.time || '상관없음'}
 난이도: ${filters.difficulty || '상관없음'}
 식이 제한: ${filters.diet || '없음'}
+음식 종류: ${filters.cuisines?.join(', ') || '전체'}
 제외할 직전 메뉴: ${exclude.join(', ') || '없음'}
 
 아래 검색 문서에 있는 레시피를 근거로 서로 다른 메뉴를 최대 3개 추천하세요. 검색 문서에 없는 조리법을 새로 지어내지 말고, 재료가 부족하면 missingIngredients에 표시하세요. 제외 메뉴는 반환하지 마세요. 반드시 JSON 객체 하나만 반환하세요.
@@ -62,6 +68,60 @@ function validBody(body) {
     body.ingredients.length <= 50 && body.ingredients.every(item => typeof item === 'string' && item.trim());
 }
 
+// 선택한 음식 종류가 지원 목록에 있고 중복되지 않는지 검증합니다.
+function validCuisines(cuisines) {
+  return Array.isArray(cuisines) && cuisines.length <= CUISINES.length && cuisines.every(cuisine => CUISINES.includes(cuisine));
+}
+
+// 레시피의 cuisine 배열과 선택 조건을 비교해 OR 조건으로 후보를 필터링합니다.
+function filterByCuisine(hits, cuisines) {
+  if (!cuisines.length) return hits;
+  return hits.filter(hit => (RECIPE_CUISINES[hit.recipe_name] || []).some(cuisine => cuisines.includes(cuisine)));
+}
+
+// 재료명 비교를 위해 공백과 문장부호를 정리합니다.
+function normalizeIngredient(value) {
+  return String(value || '').toLocaleLowerCase('ko-KR').replace(/[\s.,。]+/g, '');
+}
+
+// 검색된 레시피 원문에서 쉼표로 나열된 필요 재료를 추출합니다.
+function extractRecipeIngredients(content) {
+  const patterns = [
+    /(?:은|는)\s+(.+?)(?:으로 만드는|으로 만들 수 있다|으로 만든다|로 만든다|을 넣어|를 사용한다)[.。]/,
+    /(?:은|는)\s+(.+?)(?:으로 만드는|으로 만들 수 있다|으로 만든다|로 만든다|을 넣어|를 사용한다)/
+  ];
+  const match = patterns.map(pattern => String(content || '').match(pattern)).find(Boolean);
+  if (!match) return [];
+  return match[1]
+    .split(/,|\s+및\s+|\s+와\s+|\s+과\s+/)
+    .map(item => item.trim().replace(/[.。]$/g, ''))
+    .filter(Boolean);
+}
+
+// 사용자가 고른 재료를 기준으로 레시피의 부족 재료를 서버에서 확정합니다.
+function calculateMissingIngredients(ownedIngredients, requiredIngredients) {
+  const owned = new Set(ownedIngredients.map(normalizeIngredient));
+  return requiredIngredients.filter(item => !owned.has(normalizeIngredient(item)));
+}
+
+// Claude가 누락한 메뉴를 검색 문서만으로 보충할 때 사용할 기본 메뉴 객체를 만듭니다.
+function fallbackMenuFromHit(hit, ownedIngredients) {
+  const content = String(hit.content || '');
+  const requiredIngredients = hit.requiredIngredients || [];
+  const cookTime = content.match(/(?:조리 시간은|조리 시간은 약)\s*(\d+)분/);
+  const difficulty = content.match(/난이도는\s*(쉬움|보통|어려움)/);
+  return {
+    name: hit.recipe_name,
+    cuisine: hit.cuisine || [],
+    description: content.split(/[.。]/)[0].trim(),
+    recipe: content.split(/[.。]/).map(step => step.trim()).filter(Boolean),
+    cookTime: cookTime ? `${cookTime[1]}분` : '시간 정보 없음',
+    difficulty: difficulty ? difficulty[1] : '보통',
+    ingredients: requiredIngredients,
+    missingIngredients: calculateMissingIngredients(ownedIngredients, requiredIngredients)
+  };
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST만 허용됩니다.' });
   const config = env();
@@ -69,6 +129,8 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'RAG 서버 환경변수가 설정되지 않았습니다.' });
   }
   if (!validBody(req.body)) return res.status(400).json({ error: '재료 입력이 올바르지 않습니다.' });
+  const cuisines = Array.isArray(req.body.cuisines) ? [...new Set(req.body.cuisines)] : [];
+  if (!validCuisines(cuisines)) return res.status(400).json({ error: '음식 종류 입력이 올바르지 않습니다.' });
 
   try {
     const body = req.body;
@@ -77,18 +139,49 @@ module.exports = async function handler(req, res) {
     const query = `${body.ingredients.join(', ')} ${filters.time || ''} ${filters.difficulty || ''} ${filters.diet || ''}`;
     const hits = await searchRecipes(await embed(query, config.openai), config);
     if (!hits.length) return res.status(404).json({ error: '관련 레시피를 찾지 못했습니다.' });
+    const cuisineHits = filterByCuisine(hits, cuisines);
+    if (cuisines.length && !cuisineHits.length) {
+      return res.status(200).json({ menus: [], cuisines, message: '선택하신 음식 종류에 맞는 레시피를 찾지 못했어요. 다른 재료나 음식 종류를 선택해보세요.' });
+    }
+    const enrichedHits = cuisineHits.map(hit => ({
+      ...hit,
+      requiredIngredients: extractRecipeIngredients(hit.content),
+      cuisine: RECIPE_CUISINES[hit.recipe_name] || []
+    }));
 
     const answer = await openai('chat/completions', {
       model: 'gpt-4o-mini',
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: '검색 문서에 근거한 JSON만 반환하세요.' },
-        { role: 'user', content: promptFor({ ingredients: body.ingredients, filters, exclude, hits }) }
+        { role: 'user', content: promptFor({ ingredients: body.ingredients, filters: { ...filters, cuisines }, exclude, hits: enrichedHits }) }
       ]
     }, config.openai);
     const result = JSON.parse(answer.choices?.[0]?.message?.content || '{}');
     if (!Array.isArray(result.menus) || result.menus.length === 0) throw new Error('Invalid RAG response');
-    return res.status(200).json({ menus: result.menus.slice(0, 3), sources: hits.map(hit => hit.recipe_name) });
+    const hitByName = new Map(enrichedHits.map(hit => [hit.recipe_name, hit]));
+    const menus = result.menus.slice(0, 3).map(menu => {
+      const hit = hitByName.get(menu.name);
+      const requiredIngredients = hit?.requiredIngredients?.length
+        ? hit.requiredIngredients
+        : (Array.isArray(menu.ingredients) ? menu.ingredients : []);
+      return {
+        ...menu,
+        cuisine: hit?.cuisine || [],
+        ingredients: requiredIngredients,
+        missingIngredients: calculateMissingIngredients(body.ingredients, requiredIngredients)
+      };
+    });
+    const seenNames = new Set(menus.map(menu => menu.name));
+    const excludedNames = new Set(exclude);
+    for (const hit of enrichedHits) {
+      if (menus.length >= 3) break;
+      if (seenNames.has(hit.recipe_name) || excludedNames.has(hit.recipe_name)) continue;
+      menus.push(fallbackMenuFromHit(hit, body.ingredients));
+      seenNames.add(hit.recipe_name);
+    }
+    if (menus.length < 3) throw new Error('추천 가능한 고유 레시피가 3개 미만입니다.');
+    return res.status(200).json({ menus, cuisines, sources: cuisineHits.map(hit => hit.recipe_name) });
   } catch (error) {
     console.error(error.message);
     return res.status(502).json({ error: 'RAG 추천을 생성하지 못했습니다.' });

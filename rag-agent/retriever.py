@@ -7,6 +7,7 @@ from typing import Any, Iterable
 
 
 DEFAULT_ALIASES_PATH = Path(__file__).with_name("ingredient_aliases.json")
+FIXED_CUISINES = {"한식", "중식", "양식", "일식", "분식"}
 QUANTITY_PATTERN = re.compile(
     r"(?:\d+(?:[./]\d+)?|반|한|두|세|네|다섯)\s*"
     r"(?:kg|g|mg|ml|l|개|장|줄|쪽|알|컵|큰술|작은술|스푼|봉|팩|모|근|마리|인분|줌|대)?",
@@ -65,6 +66,14 @@ def calculate_match_score(
         "matched_ingredients": matched,
         "missing_ingredients": missing,
     }
+
+
+def filter_candidates_by_cuisines(candidates: Iterable[dict[str, Any]], cuisines: Iterable[str]) -> list[dict[str, Any]]:
+    """선택한 음식 종류 중 하나라도 레시피 cuisine과 겹치는 후보만 남깁니다(OR 조건)."""
+    selected = set(cuisines) & FIXED_CUISINES
+    if not selected:
+        return list(candidates)
+    return [candidate for candidate in candidates if selected.intersection(candidate["recipe"].get("cuisine", []))]
 
 
 def rank_candidates(

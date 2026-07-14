@@ -32,7 +32,7 @@ uvicorn app:app --reload
 ```bash
 curl -X POST http://127.0.0.1:8000/recommend \
   -H 'content-type: application/json' \
-  -d '{"ingredients":["계란","양파","감자"],"top_k":3}'
+  -d '{"ingredients":["계란","양파","감자"],"top_k":3,"cuisines":["한식","분식"]}'
 ```
 
 ```json
@@ -40,8 +40,12 @@ curl -X POST http://127.0.0.1:8000/recommend \
   "recommendations": [
     {
       "recipe_title": "감자채 볶음",
+      "cuisine": ["한식"],
       "matched_ingredients": ["감자", "양파"],
       "missing_ingredients": ["당근", "소금", "식용유"],
+      "match_count": 2,
+      "match_ratio": 0.4,
+      "coverage_ratio": 0.6667,
       "reason": "보유한 감자와 양파를 활용할 수 있고 조리 시간이 짧습니다."
     }
   ]

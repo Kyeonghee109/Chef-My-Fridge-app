@@ -33,7 +33,10 @@ def main() -> None:
 
     recipes = load_recipes(data_path)
     documents = [
-        Document(page_content=recipe_to_document(recipe), metadata={"recipe_id": recipe["id"], "title": recipe["title"]})
+        Document(
+            page_content=recipe_to_document(recipe),
+            metadata={"recipe_id": recipe["id"], "title": recipe["title"], "cuisine": ",".join(recipe["cuisine"])},
+        )
         for recipe in recipes
     ]
     embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)

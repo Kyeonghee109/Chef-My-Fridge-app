@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from rag_service import RagService
 
+FIXED_CUISINES = {"한식", "중식", "양식", "일식", "분식"}
+
 
 load_dotenv()
 app = FastAPI(title="Fridge Recipe RAG Agent", version="1.0.0")
@@ -17,6 +19,7 @@ app = FastAPI(title="Fridge Recipe RAG Agent", version="1.0.0")
 class RecommendRequest(BaseModel):
     ingredients: list[str] = Field(min_length=1, max_length=50)
     top_k: int = Field(default=3, ge=1, le=10)
+    cuisines: list[str] = Field(default_factory=list, max_length=5)
 
     @field_validator("ingredients")
     @classmethod
@@ -26,6 +29,15 @@ class RecommendRequest(BaseModel):
         if not cleaned:
             raise ValueError("재료를 하나 이상 입력하세요.")
         return cleaned
+
+    @field_validator("cuisines")
+    @classmethod
+    def validate_cuisines(cls, values: list[str]) -> list[str]:
+        """선택한 음식 종류가 고정된 다섯 카테고리에 포함되는지 확인합니다."""
+        invalid = set(values) - FIXED_CUISINES
+        if invalid:
+            raise ValueError(f"지원하지 않는 음식 종류입니다: {', '.join(sorted(invalid))}")
+        return list(dict.fromkeys(values))
 
 
 @lru_cache(maxsize=1)
@@ -51,8 +63,14 @@ def health() -> dict[str, str | bool]:
 def recommend(request: RecommendRequest) -> dict[str, object]:
     """냉장고 재료를 받아 RAG 기반 레시피 추천 목록을 반환합니다."""
     try:
-        recommendations = get_service().recommend(request.ingredients, request.top_k)
+        recommendations = get_service().recommend(request.ingredients, request.top_k, request.cuisines)
         if not recommendations:
+            if request.cuisines:
+                return {
+                    "recommendations": [],
+                    "message": "선택하신 음식 종류에 맞는 레시피를 찾지 못했어요. 다른 재료나 음식 종류를 선택해보세요.",
+                    "cuisines": request.cuisines,
+                }
             return {
                 "recommendations": [],
                 "message": "입력한 재료와 실제로 겹치는 레시피를 찾지 못했습니다. 다른 재료를 추가해 보세요.",

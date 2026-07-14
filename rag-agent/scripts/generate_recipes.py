@@ -50,6 +50,18 @@ STYLES = [
     ("분식", "떡볶이", "분식", ["고추장 2큰술", "물엿 1큰술"], 25),
 ]
 
+FIXED_CUISINES = {"한식", "중식", "양식", "일식", "분식"}
+EXISTING_CUISINES = {
+    "계란 볶음밥": ["한식"], "김치찌개": ["한식"], "두부 구이": ["한식"],
+    "닭가슴살 채소볶음": ["한식"], "토마토 파스타": ["양식"], "감자채 볶음": ["한식"],
+    "소불고기": ["한식"], "잡채": ["한식"], "김치전": ["한식", "분식"],
+    "된장찌개": ["한식"], "까르보나라": ["양식"], "치즈 오믈렛": ["양식"],
+    "치킨 카레": ["일식"], "토마토 피자 토스트": ["양식"], "마파두부": ["중식"],
+    "새우 볶음밥": ["중식"], "탕수육": ["중식"], "짜장면": ["중식"],
+    "태국식 바질 치킨": ["양식"], "그릭 샐러드": ["양식"], "해산물 리소토": ["양식"],
+    "비빔국수": ["한식", "분식"], "해물파전": ["한식"],
+}
+
 
 def make_recipe(recipe_id: int, style: tuple, main: tuple[str, str], vegetable: tuple[str, str]) -> dict:
     """주재료·채소·조리법 조합 하나를 표준 레시피 문서로 만듭니다."""
@@ -69,14 +81,23 @@ def make_recipe(recipe_id: int, style: tuple, main: tuple[str, str], vegetable: 
             f"{vegetable_name}과 양념을 넣고 {tag} 방식으로 {cook_time}분간 조리합니다.",
         ],
         "tags": [category, tag, suffix, "재료 조합 레시피"],
+        "cuisine": [category],
         "cook_time": cook_time,
     }
+
+
+def add_existing_cuisine(recipe: dict) -> dict:
+    """기존 샘플 레시피에 고정된 5개 음식 종류 중 알맞은 값을 추가합니다."""
+    cuisine = EXISTING_CUISINES.get(recipe["title"])
+    if cuisine is None:
+        cuisine = [tag for tag in recipe.get("tags", []) if tag in FIXED_CUISINES] or ["한식"]
+    return {**recipe, "cuisine": cuisine}
 
 
 def main() -> None:
     """기존 샘플을 보존하면서 10,000개 이상의 다양한 레시피를 생성합니다."""
     data_path = Path(__file__).parents[1] / "data" / "recipes.json"
-    existing = json.loads(data_path.read_text(encoding="utf-8")) if data_path.exists() else []
+    existing = [add_existing_cuisine(recipe) for recipe in json.loads(data_path.read_text(encoding="utf-8"))] if data_path.exists() else []
     titles = {recipe["title"] for recipe in existing}
     generated: list[dict] = []
     recipe_id = 1
@@ -93,4 +114,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

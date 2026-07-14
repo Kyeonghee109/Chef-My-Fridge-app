@@ -11,7 +11,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from pydantic import BaseModel, Field
 
 from recipe_loader import load_recipes
-from retriever import rank_candidates
+from retriever import filter_candidates_by_cuisines, rank_candidates
 
 
 EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -19,6 +19,7 @@ EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 class Recommendation(BaseModel):
     recipe_title: str
+    cuisine: list[str] = Field(default_factory=list)
     matched_ingredients: list[str] = Field(default_factory=list)
     missing_ingredients: list[str] = Field(default_factory=list)
     match_count: int = 0
@@ -58,11 +59,12 @@ class RagService:
         """사용자 재료 목록을 벡터 검색용 자연어 질의로 변환합니다."""
         return f"{' '.join(ingredients)}로 만들 수 있는 요리 레시피"
 
-    def recommend(self, ingredients: list[str], top_k: int) -> list[Recommendation]:
+    def recommend(self, ingredients: list[str], top_k: int, cuisines: list[str] | None = None) -> list[Recommendation]:
         """후보 레시피를 검색하고 재료 매칭 결과를 Claude의 구조화된 추천으로 변환합니다."""
+        cuisines = cuisines or []
         query = self.query_from_ingredients(ingredients)
         # 상위 3개만 검색하면 재료가 실제로 겹치는 레시피가 뒤로 밀릴 수 있으므로 충분히 넓게 검색합니다.
-        search_k = min(max(top_k * 5, 20), max(len(self.recipes), top_k))
+        search_k = min(max(top_k * 20, 100), max(len(self.recipes), top_k))
         retrieved = self.store.similarity_search_with_score(query, k=search_k)
         vector_candidates: list[dict[str, Any]] = []
         for document, distance in retrieved:
@@ -73,6 +75,8 @@ class RagService:
             if not recipe:
                 continue
             vector_candidates.append({"recipe": recipe, "vector_score": 1 / (1 + max(distance, 0))})
+        if cuisines:
+            vector_candidates = filter_candidates_by_cuisines(vector_candidates, cuisines)
         candidates = rank_candidates(ingredients, vector_candidates, top_k=max(top_k * 5, 20))
         if not candidates:
             return []
@@ -81,6 +85,7 @@ class RagService:
             [
                 {
                     "title": item["recipe"]["title"],
+                    "cuisine": item["recipe"]["cuisine"],
                     "ingredients": item["recipe"]["ingredients"],
                     "steps": item["recipe"]["steps"],
                     "tags": item["recipe"]["tags"],
@@ -120,6 +125,7 @@ class RagService:
             recommendations.append(
                 Recommendation(
                     recipe_title=item["recipe"]["title"],
+                    cuisine=item["recipe"]["cuisine"],
                     matched_ingredients=item["matched_ingredients"],
                     missing_ingredients=item["missing_ingredients"],
                     match_count=item["match_count"],
@@ -141,6 +147,7 @@ class RagService:
             recommendations.append(
                 Recommendation(
                     recipe_title=title,
+                    cuisine=item["recipe"]["cuisine"],
                     matched_ingredients=item["matched_ingredients"],
                     missing_ingredients=item["missing_ingredients"],
                     match_count=item["match_count"],
