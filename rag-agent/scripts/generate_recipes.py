@@ -63,14 +63,14 @@ EXISTING_CUISINES = {
 }
 
 
-def make_recipe(recipe_id: int, style: tuple, main: tuple[str, str], vegetable: tuple[str, str]) -> dict:
+def make_recipe(recipe_id: int, style: tuple, main: tuple[str, str], vegetable: tuple[str, str], variant: int = 0) -> dict:
     """주재료·채소·조리법 조합 하나를 표준 레시피 문서로 만듭니다."""
     category, suffix, tag, sauce, cook_time = style
     main_name, main_amount = main
     vegetable_name, vegetable_amount = vegetable
     ingredients = [f"{main_name} {main_amount}", f"{vegetable_name} {vegetable_amount}", "양파 1/2개", "마늘 1쪽", *sauce]
     unique_ingredients = list(dict.fromkeys(ingredients))
-    title = f"{main_name} {vegetable_name} {suffix}"
+    title = f"{main_name} {vegetable_name} {suffix}" + (f" {variant}번" if variant else "")
     return {
         "id": f"generated-{recipe_id:05d}",
         "title": title,
@@ -112,6 +112,23 @@ def main() -> None:
         if recipe["title"] not in titles:
             generated.append(recipe)
             titles.add(recipe["title"])
+    # 한식에 비해 부족한 카테고리는 조리법 변형 레시피를 추가해 분포를 균형화합니다.
+    target_count = max(sum(1 for recipe in existing if "한식" in recipe.get("cuisine", [])), 4000)
+    counts = {cuisine: sum(1 for recipe in existing + generated if cuisine in recipe.get("cuisine", [])) for cuisine in FIXED_CUISINES}
+    variant = 1
+    for style, main, vegetable in product(STYLES, MAIN_INGREDIENTS, VEGETABLES):
+        cuisine = style[0]
+        if cuisine == "한식":
+            continue
+        while counts[cuisine] < target_count:
+            recipe = make_recipe(recipe_id, style, main, vegetable, variant)
+            recipe_id += 1
+            variant += 1
+            if recipe["title"] in titles:
+                continue
+            generated.append(recipe)
+            titles.add(recipe["title"])
+            counts[cuisine] += 1
     recipes = existing + generated
     data_path.write_text(json.dumps(recipes, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"레시피 생성 완료: {len(recipes)}개")
