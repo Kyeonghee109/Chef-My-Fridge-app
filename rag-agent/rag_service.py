@@ -11,7 +11,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from pydantic import BaseModel, Field
 
 from recipe_loader import load_recipes
-from retriever import filter_candidates_by_cuisines, rank_candidates
+from retriever import filter_candidates_by_cuisines, rank_candidates, select_diverse_candidates
 
 
 EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -77,9 +77,10 @@ class RagService:
             vector_candidates.append({"recipe": recipe, "vector_score": 1 / (1 + max(distance, 0))})
         if cuisines:
             vector_candidates = filter_candidates_by_cuisines(vector_candidates, cuisines)
-        candidates = rank_candidates(ingredients, vector_candidates, top_k=max(top_k * 5, 20))
-        if not candidates:
+        ranked_candidates = rank_candidates(ingredients, vector_candidates, top_k=max(top_k * 5, 20))
+        if not ranked_candidates:
             return []
+        selected_candidates = select_diverse_candidates(ranked_candidates, top_k, cuisines_selected=bool(cuisines))
 
         context = json.dumps(
             [
@@ -96,7 +97,7 @@ class RagService:
                     "match_ratio": item["match_ratio"],
                     "coverage_ratio": item["coverage_ratio"],
                 }
-                for item in candidates
+                for item in ranked_candidates
             ],
             ensure_ascii=False,
         )
@@ -115,46 +116,17 @@ class RagService:
         response = structured.invoke(prompt)
 
         # Claude가 누락하거나 중복해서 반환한 항목을 제거하고 검색 결과 순서로 부족한 수를 보충합니다.
-        candidate_by_title = {item["recipe"]["title"]: item for item in candidates}
-        recommendations: list[Recommendation] = []
-        seen_titles: set[str] = set()
-        for recommendation in response.recommendations:
-            item = candidate_by_title.get(recommendation.recipe_title)
-            if not item or recommendation.recipe_title in seen_titles:
-                continue
-            recommendations.append(
-                Recommendation(
-                    recipe_title=item["recipe"]["title"],
-                    cuisine=item["recipe"]["cuisine"],
-                    matched_ingredients=item["matched_ingredients"],
-                    missing_ingredients=item["missing_ingredients"],
-                    match_count=item["match_count"],
-                    match_ratio=item["match_ratio"],
-                    coverage_ratio=item["coverage_ratio"],
-                    reason=recommendation.reason,
-                )
+        reason_by_title = {recommendation.recipe_title: recommendation.reason for recommendation in response.recommendations}
+        return [
+            Recommendation(
+                recipe_title=item["recipe"]["title"],
+                cuisine=item["recipe"]["cuisine"],
+                matched_ingredients=item["matched_ingredients"],
+                missing_ingredients=item["missing_ingredients"],
+                match_count=item["match_count"],
+                match_ratio=item["match_ratio"],
+                coverage_ratio=item["coverage_ratio"],
+                reason=reason_by_title.get(item["recipe"]["title"], "재료 매칭 점수와 음식 종류 다양성을 고려해 추천합니다."),
             )
-            seen_titles.add(recommendation.recipe_title)
-            if len(recommendations) == top_k:
-                break
-
-        for item in candidates:
-            if len(recommendations) == top_k:
-                break
-            title = item["recipe"]["title"]
-            if title in seen_titles:
-                continue
-            recommendations.append(
-                Recommendation(
-                    recipe_title=title,
-                    cuisine=item["recipe"]["cuisine"],
-                    matched_ingredients=item["matched_ingredients"],
-                    missing_ingredients=item["missing_ingredients"],
-                    match_count=item["match_count"],
-                    match_ratio=item["match_ratio"],
-                    coverage_ratio=item["coverage_ratio"],
-                    reason="보유 재료와 일치하는 비율이 높고 부족한 재료가 적어 보충 추천합니다.",
-                )
-            )
-            seen_titles.add(title)
-        return recommendations
+            for item in selected_candidates
+        ]

@@ -64,6 +64,8 @@ final_score = (match_count * 0.5) + (match_ratio * 0.3) + (coverage_ratio * 0.2)
 
 재료 정규화 동의어는 [ingredient_aliases.json](ingredient_aliases.json)에서 관리합니다.
 
+음식 종류를 선택하지 않은 경우에는 최종 후보 점수가 크게 낮아지지 않는 범위에서 서로 다른 cuisine을 우선하는 다양성 보정을 적용합니다. cuisine을 직접 선택한 경우에는 사용자의 선택을 우선해 점수 순으로 추천합니다.
+
 ## 만개의레시피 개별 URL 가져오기
 
 만개의레시피의 공개 대량 데이터 다운로드 없이, 사용 권한이 있는 개별 레시피 URL만 가져옵니다. URL 목록을 한 줄에 하나씩 `urls.txt`에 저장한 뒤 실행합니다.

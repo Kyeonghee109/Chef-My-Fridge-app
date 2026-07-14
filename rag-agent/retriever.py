@@ -93,3 +93,33 @@ def rank_candidates(
         ranked.append({**candidate, **score})
     ranked.sort(key=lambda item: (-item["final_score"], -item["match_count"], -item.get("vector_score", 0)))
     return ranked[:top_k]
+
+
+def select_diverse_candidates(
+    ranked_candidates: list[dict[str, Any]],
+    top_k: int = 3,
+    cuisines_selected: bool = False,
+    score_gap_threshold: float = 0.35,
+) -> list[dict[str, Any]]:
+    """음식 종류를 직접 고르지 않았을 때 점수 손실이 작은 범위에서 cuisine 다양성을 보정합니다."""
+    if cuisines_selected or top_k <= 1:
+        return ranked_candidates[:top_k]
+    selected: list[dict[str, Any]] = []
+    used_cuisines: set[str] = set()
+    remaining = list(ranked_candidates)
+    while remaining and len(selected) < top_k:
+        best = remaining[0]
+        diverse = next(
+            (
+                candidate
+                for candidate in remaining
+                if not used_cuisines.intersection(candidate["recipe"].get("cuisine", []))
+                and best["final_score"] - candidate["final_score"] <= score_gap_threshold
+            ),
+            None,
+        )
+        chosen = diverse or best
+        selected.append(chosen)
+        used_cuisines.update(chosen["recipe"].get("cuisine", []))
+        remaining.remove(chosen)
+    return selected

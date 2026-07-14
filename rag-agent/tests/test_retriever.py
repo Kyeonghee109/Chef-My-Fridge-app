@@ -1,4 +1,4 @@
-from retriever import calculate_match_score, filter_candidates_by_cuisines, rank_candidates
+from retriever import calculate_match_score, filter_candidates_by_cuisines, rank_candidates, select_diverse_candidates
 
 
 def test_normalized_quantities_and_aliases_are_matched() -> None:
@@ -56,3 +56,29 @@ def test_empty_cuisine_filter_keeps_all_candidates() -> None:
     ]
 
     assert filter_candidates_by_cuisines(candidates, []) == candidates
+
+
+def test_diversity_selection_prefers_two_cuisines_without_filter() -> None:
+    """전체 검색에서 점수 차이가 작으면 서로 다른 cuisine을 우선 선택합니다."""
+    ranked = [
+        {"recipe": {"title": "한식1", "cuisine": ["한식"]}, "final_score": 2.0},
+        {"recipe": {"title": "한식2", "cuisine": ["한식"]}, "final_score": 1.95},
+        {"recipe": {"title": "양식1", "cuisine": ["양식"]}, "final_score": 1.8},
+    ]
+
+    selected = select_diverse_candidates(ranked, top_k=2)
+
+    assert [item["recipe"]["title"] for item in selected] == ["한식1", "양식1"]
+
+
+def test_diversity_selection_is_disabled_when_cuisine_selected() -> None:
+    """사용자가 cuisine을 고르면 원래 점수 순서를 그대로 유지합니다."""
+    ranked = [
+        {"recipe": {"title": "한식1", "cuisine": ["한식"]}, "final_score": 2.0},
+        {"recipe": {"title": "한식2", "cuisine": ["한식"]}, "final_score": 1.95},
+        {"recipe": {"title": "양식1", "cuisine": ["양식"]}, "final_score": 1.8},
+    ]
+
+    selected = select_diverse_candidates(ranked, top_k=2, cuisines_selected=True)
+
+    assert [item["recipe"]["title"] for item in selected] == ["한식1", "한식2"]

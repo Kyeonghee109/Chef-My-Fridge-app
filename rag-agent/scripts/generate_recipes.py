@@ -71,6 +71,9 @@ def make_recipe(recipe_id: int, style: tuple, main: tuple[str, str], vegetable: 
     ingredients = [f"{main_name} {main_amount}", f"{vegetable_name} {vegetable_amount}", "양파 1/2개", "마늘 1쪽", *sauce]
     unique_ingredients = list(dict.fromkeys(ingredients))
     title = f"{main_name} {vegetable_name} {suffix}" + (f" {variant}번" if variant else "")
+    variant_offset = [0, -10, -5, 5, 10, 20][variant % 6] if variant else 0
+    effective_cook_time = max(10, min(60, cook_time + variant_offset))
+    difficulty = "쉬움" if effective_cook_time <= 20 else "보통" if effective_cook_time <= 35 else "어려움"
     return {
         "id": f"generated-{recipe_id:05d}",
         "title": title,
@@ -78,31 +81,35 @@ def make_recipe(recipe_id: int, style: tuple, main: tuple[str, str], vegetable: 
         "steps": [
             f"{main_name}과 {vegetable_name}을 손질합니다.",
             f"팬이나 냄비에 {main_name}, 양파, 마늘을 넣고 익힙니다.",
-            f"{vegetable_name}과 양념을 넣고 {tag} 방식으로 {cook_time}분간 조리합니다.",
+            f"{vegetable_name}과 양념을 넣고 {tag} 방식으로 {effective_cook_time}분간 조리합니다.",
         ],
         "tags": [category, tag, suffix, "재료 조합 레시피"],
         "cuisine": [category],
-        "cook_time": cook_time,
+        "cook_time": effective_cook_time,
+        "difficulty": difficulty,
     }
 
 
 def add_existing_cuisine(recipe: dict) -> dict:
     """기존 샘플 레시피에 고정된 5개 음식 종류 중 알맞은 값을 추가합니다."""
     # 사용자가 지정한 예외 분류 규칙을 가장 먼저 적용합니다.
+    difficulty = recipe.get("difficulty") or ("쉬움" if recipe.get("cook_time", 30) <= 20 else "보통" if recipe.get("cook_time", 30) <= 35 else "어려움")
     if "죽" in recipe["title"]:
-        return {**recipe, "cuisine": ["한식"]}
+        return {**recipe, "cuisine": ["한식"], "difficulty": difficulty}
     if "스프" in recipe["title"] or "수프" in recipe["title"]:
-        return {**recipe, "cuisine": ["양식"]}
+        return {**recipe, "cuisine": ["양식"], "difficulty": difficulty}
     cuisine = EXISTING_CUISINES.get(recipe["title"])
     if cuisine is None:
         cuisine = [tag for tag in recipe.get("tags", []) if tag in FIXED_CUISINES] or ["한식"]
-    return {**recipe, "cuisine": cuisine}
+    return {**recipe, "cuisine": cuisine, "difficulty": difficulty}
 
 
 def main() -> None:
     """기존 샘플을 보존하면서 10,000개 이상의 다양한 레시피를 생성합니다."""
     data_path = Path(__file__).parents[1] / "data" / "recipes.json"
-    existing = [add_existing_cuisine(recipe) for recipe in json.loads(data_path.read_text(encoding="utf-8"))] if data_path.exists() else []
+    raw_existing = json.loads(data_path.read_text(encoding="utf-8")) if data_path.exists() else []
+    # generated-* 레시피는 생성기를 다시 실행할 때 변형 메타데이터도 함께 재생성합니다.
+    existing = [add_existing_cuisine(recipe) for recipe in raw_existing if not str(recipe.get("id", "")).startswith("generated-")]
     titles = {recipe["title"] for recipe in existing}
     generated: list[dict] = []
     recipe_id = 1
