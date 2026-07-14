@@ -66,14 +66,14 @@
     .chip { display:inline-flex; align-items:center; gap:7px; padding:7px 10px; border-radius:999px; color:var(--green); background:var(--mint); font-size:.9rem; }
     .chip button { padding:0; border:0; color:inherit; background:transparent; font-size:1rem; line-height:1; }
     .actions { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:14px; margin-top:28px; }
-    .status { position:fixed; top:50%; left:50%; z-index:30; display:flex; align-items:center; justify-content:center; width:min(450px,calc(100% - 40px)); height:100px; padding:20px 24px; border:1px solid #46645626; border-radius:24px; color:#3b4b42; background:#e8f0ea; box-shadow:0 14px 36px #292a2714; opacity:0; visibility:hidden; pointer-events:none; transform:translate(-50%,-50%); }
+    .status { position:fixed; top:50%; left:50%; z-index:30; display:flex; align-items:center; justify-content:center; width:min(450px,calc(100% - 40px)); height:105px; padding:20px 24px; border:1px solid #46645626; border-radius:24px; color:#3b4b42; background:#e8f0ea; box-shadow:0 14px 36px #292a2714; opacity:0; visibility:hidden; pointer-events:none; transform:translate(-50%,-50%); }
     .status.is-visible { opacity:1; visibility:visible; animation:status-in .28s ease-out both; }
     .status.is-leaving { animation:status-out .22s ease-in both; }
-    .status-content { display:flex; flex-direction:column; align-items:center; gap:9px; min-width:0; width:100%; }
+    .status-content { display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0; width:100%; }
     .status-text { font-size:1.125rem; font-weight:600; line-height:1.5; text-align:center; white-space:nowrap; }
-    .status-ingredients { position:relative; width:100%; height:28px; overflow:hidden; mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); }
+    .status-ingredients { position:relative; width:100%; height:32px; overflow:hidden; mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); }
     .status-conveyor { position:absolute; inset:0; }
-    .conveyor-item { position:absolute; top:0; display:block; font-size:1.35rem; line-height:1; will-change:transform; }
+    .conveyor-item { position:absolute; top:3px; display:block; font-size:1.35rem; line-height:1; will-change:transform; }
     .conveyor-glyph { display:block; animation:conveyor-float 2.8s ease-in-out infinite; animation-delay:var(--float-delay); }
     @keyframes status-in { from { opacity:0; transform:translate(-50%,calc(-50% + 16px)) scale(.98); } to { opacity:1; transform:translate(-50%,-50%) scale(1); } }
     @keyframes status-out { to { opacity:0; visibility:hidden; transform:translate(-50%,calc(-50% - 12px)) scale(.98); } }
