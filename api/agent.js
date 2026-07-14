@@ -18,7 +18,11 @@ async function openai(path, body, key) {
 }
 
 async function embed(text, key) {
-  const payload = await openai('embeddings', { model: 'text-embedding-3-small', input: text }, key);
+  const payload = await openai('embeddings', {
+    model: 'text-embedding-3-large',
+    dimensions: 1536,
+    input: text
+  }, key);
   return payload.data[0].embedding;
 }
 

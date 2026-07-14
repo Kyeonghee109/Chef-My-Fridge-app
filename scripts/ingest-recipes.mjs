@@ -14,7 +14,11 @@ const chunks = recipes.flatMap(recipe => {
 const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
   method: 'POST',
   headers: { 'content-type': 'application/json', authorization: `Bearer ${OPENAI_API_KEY}` },
-  body: JSON.stringify({ model: 'text-embedding-3-small', input: chunks.map(chunk => chunk.content) })
+  body: JSON.stringify({
+    model: 'text-embedding-3-large',
+    dimensions: 1536,
+    input: chunks.map(chunk => chunk.content)
+  })
 });
 if (!embeddingResponse.ok) throw new Error(`Embedding failed: ${embeddingResponse.status}`);
 const embeddings = (await embeddingResponse.json()).data.map(item => item.embedding);
