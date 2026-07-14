@@ -2,6 +2,7 @@ create extension if not exists vector;
 
 create table if not exists public.recipe_chunks (
   id bigint generated always as identity primary key,
+  chunk_key text,
   recipe_name text not null,
   content text not null,
   metadata jsonb not null default '{}'::jsonb,
@@ -10,6 +11,10 @@ create table if not exists public.recipe_chunks (
 
 create index if not exists recipe_chunks_embedding_idx
   on public.recipe_chunks using hnsw (embedding vector_cosine_ops);
+
+alter table public.recipe_chunks add column if not exists chunk_key text;
+create unique index if not exists recipe_chunks_chunk_key_idx
+  on public.recipe_chunks (chunk_key);
 
 drop function if exists public.match_recipe_chunks(vector, float, integer);
 

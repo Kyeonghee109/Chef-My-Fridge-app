@@ -1,11 +1,17 @@
 import fs from 'node:fs/promises';
 
 const { OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
-if (!OPENAI_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) throw new Error('OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY가 필요합니다.');
+if (!OPENAI_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY가 필요합니다.');
+}
 
+const BATCH_SIZE = Number(process.env.INGEST_BATCH_SIZE || 50);
+const MAX_RETRIES = 3;
+const PAGE_SIZE = 1000;
 const recipeDataPath = process.env.RECIPE_DATA_PATH || new URL('../rag-agent/data/recipes.json', import.meta.url);
 const rawRecipes = JSON.parse(await fs.readFile(recipeDataPath, 'utf8'));
 const recipes = rawRecipes.map(recipe => ({
+  id: String(recipe.id || recipe.name || recipe.title),
   name: recipe.name || recipe.title,
   cuisine: Array.isArray(recipe.cuisine) ? recipe.cuisine : [],
   text: recipe.text || [
@@ -18,10 +24,28 @@ const recipes = rawRecipes.map(recipe => ({
     `난이도: ${recipe.difficulty || ''}`
   ].join('. ')
 }));
+
 const chunks = recipes.flatMap(recipe => {
-  const size = 300, overlap = 50;
+  const size = 300;
+  const overlap = 50;
   const output = [];
-  for (let start = 0; start < recipe.text.length; start += size - overlap) output.push({ recipe_name: recipe.name, content: recipe.text.slice(start, start + size), metadata: { source: 'recipes.json', cuisine: recipe.cuisine || [] } });
+  let chunkIndex = 0;
+  for (let start = 0; start < recipe.text.length; start += size - overlap) {
+    output.push({
+      chunk_key: `${recipe.id}::${chunkIndex}`,
+      recipe_id: recipe.id,
+      chunk_index: chunkIndex,
+      recipe_name: recipe.name,
+      content: recipe.text.slice(start, start + size),
+      metadata: {
+        source: 'recipes.json',
+        recipe_id: recipe.id,
+        chunk_index: chunkIndex,
+        cuisine: recipe.cuisine
+      }
+    });
+    chunkIndex += 1;
+  }
   return output;
 });
 
@@ -31,30 +55,103 @@ const baseHeaders = {
   authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
 };
 
-// 이전에 적재된 소수 샘플이나 중복 청크가 새 데이터와 섞이지 않도록 초기화합니다.
-const clearResponse = await fetch(`${SUPABASE_URL}/rest/v1/recipe_chunks?id=gt.0`, {
-  method: 'DELETE',
-  headers: { ...baseHeaders, prefer: 'return=minimal' }
-});
-if (!clearResponse.ok) throw new Error(`Supabase reset failed: ${clearResponse.status} ${await clearResponse.text()}`);
+const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
-const batchSize = 100;
-for (let start = 0; start < chunks.length; start += batchSize) {
-  const batch = chunks.slice(start, start + batchSize);
-  const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
+async function requestWithRetry(label, request) {
+  let lastError;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
+    try {
+      return await request();
+    } catch (error) {
+      lastError = error;
+      if (attempt === MAX_RETRIES) break;
+      const delay = 1000 * (2 ** (attempt - 1));
+      console.warn(`${label} 실패 (${attempt}/${MAX_RETRIES}), ${delay}ms 후 재시도: ${error.message}`);
+      await sleep(delay);
+    }
+  }
+  throw lastError;
+}
+
+async function fetchExistingRows() {
+  const rows = [];
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const response = await requestWithRetry(`기존 row 조회 ${offset}`, () => fetch(
+      `${SUPABASE_URL}/rest/v1/recipe_chunks?select=chunk_key,recipe_name,content&limit=${PAGE_SIZE}&offset=${offset}`,
+      { headers: baseHeaders }
+    ));
+    if (!response.ok) throw new Error(`Supabase existing rows failed: ${response.status} ${await response.text()}`);
+    const page = await response.json();
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) return rows;
+  }
+}
+
+async function createEmbeddings(batch) {
+  const response = await fetch('https://api.openai.com/v1/embeddings', {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${OPENAI_API_KEY}` },
-    body: JSON.stringify({ model: 'text-embedding-3-large', dimensions: 1536, input: batch.map(chunk => chunk.content) })
+    body: JSON.stringify({
+      model: 'text-embedding-3-large',
+      dimensions: 1536,
+      input: batch.map(chunk => chunk.content)
+    })
   });
-  if (!embeddingResponse.ok) throw new Error(`Embedding failed: ${embeddingResponse.status}`);
-  const embeddings = (await embeddingResponse.json()).data.map(item => item.embedding);
-  const rows = batch.map((chunk, index) => ({ ...chunk, embedding: embeddings[index] }));
-  const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/recipe_chunks`, {
-    method: 'POST',
-    headers: { ...baseHeaders, prefer: 'return=minimal' },
-    body: JSON.stringify(rows)
-  });
-  if (!insertResponse.ok) throw new Error(`Supabase insert failed: ${insertResponse.status} ${await insertResponse.text()}`);
-  console.log(`인덱싱 진행: ${Math.min(start + batch.length, chunks.length)}/${chunks.length}`);
+  if (!response.ok) throw new Error(`Embedding failed: ${response.status} ${await response.text()}`);
+  const payload = await response.json();
+  return payload.data.map(item => item.embedding);
 }
-console.log(`인덱싱 완료: ${recipes.length}개 레시피, ${chunks.length}개 청크`);
+
+async function upsertBatch(batch) {
+  const embeddings = await requestWithRetry(`임베딩 ${batch[0].chunk_key}`, () => createEmbeddings(batch));
+  const rows = batch.map((chunk, index) => ({ ...chunk, embedding: embeddings[index] }));
+  const response = await requestWithRetry(`Supabase upsert ${batch[0].chunk_key}`, () => fetch(
+    `${SUPABASE_URL}/rest/v1/recipe_chunks?on_conflict=chunk_key`,
+    {
+      method: 'POST',
+      headers: { ...baseHeaders, prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(rows)
+    }
+  ));
+  if (!response.ok) throw new Error(`Supabase upsert failed: ${response.status} ${await response.text()}`);
+}
+
+const existingRows = await fetchExistingRows();
+const existingKeyContents = new Map(existingRows.filter(row => row.chunk_key).map(row => [row.chunk_key, row.content]));
+const existingContents = new Set(existingRows.map(row => `${row.recipe_name}\u0000${row.content}`));
+const pendingChunks = chunks.filter(chunk => (
+  existingKeyContents.get(chunk.chunk_key) !== chunk.content &&
+  !existingContents.has(`${chunk.recipe_name}\u0000${chunk.content}`)
+));
+
+console.log(`레시피 ${recipes.length}개, 전체 청크 ${chunks.length}개`);
+console.log(`Supabase 기존 row ${existingRows.length}개, 이미 확인된 청크 ${chunks.length - pendingChunks.length}개, 신규/변경 삽입 예정 ${pendingChunks.length}개`);
+console.log(`배치 크기 ${BATCH_SIZE}개, 최대 재시도 ${MAX_RETRIES}회`);
+
+const failures = [];
+let completed = chunks.length - pendingChunks.length;
+for (let start = 0; start < pendingChunks.length; start += BATCH_SIZE) {
+  const batch = pendingChunks.slice(start, start + BATCH_SIZE);
+  try {
+    await upsertBatch(batch);
+  } catch (error) {
+    failures.push(...batch.map(chunk => ({ id: chunk.recipe_id, chunk_key: chunk.chunk_key, title: chunk.recipe_name, error: error.message })));
+    console.error(`배치 실패 후 다음 배치로 진행: ${batch[0].chunk_key} ~ ${batch.at(-1).chunk_key}`);
+  }
+  completed += batch.length;
+  console.log(`인덱싱 진행: ${completed}/${chunks.length}`);
+}
+
+const finalRows = await fetchExistingRows();
+const finalRecipeNames = new Set(finalRows.map(row => row.recipe_name));
+console.log(`최종 검증: Supabase row ${finalRows.length}/${chunks.length}, 레시피 ${finalRecipeNames.size}/${recipes.length}`);
+if (failures.length) {
+  console.error(`실패한 청크 ${failures.length}개:`);
+  for (const failure of failures) console.error(`- ${failure.id} (${failure.title}) [${failure.chunk_key}]`);
+  process.exitCode = 1;
+} else if (finalRows.length < chunks.length) {
+  console.error(`미완료 청크가 있습니다: ${chunks.length - finalRows.length}개`);
+  process.exitCode = 1;
+} else {
+  console.log(`인덱싱 완료: ${recipes.length}개 레시피, ${chunks.length}개 청크`);
+}
