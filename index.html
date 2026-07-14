@@ -71,11 +71,13 @@
     .status.is-leaving { animation:status-out .22s ease-in both; }
     .status-content { display:flex; flex-direction:column; align-items:center; gap:9px; min-width:0; width:100%; }
     .status-text { font-size:1.125rem; font-weight:600; line-height:1.5; text-align:center; white-space:nowrap; }
-    .status-ingredients { width:100%; overflow:hidden; mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent); }
-    .status-ingredient-line { display:block; width:max-content; font-size:1.35rem; letter-spacing:.18em; white-space:nowrap; animation:ingredient-flow 1.9s ease-in-out both; }
+    .status-ingredients { position:relative; width:100%; height:28px; overflow:hidden; mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); }
+    .status-conveyor { position:absolute; inset:0; }
+    .conveyor-item { position:absolute; top:0; display:block; font-size:1.35rem; line-height:1; will-change:transform; }
+    .conveyor-glyph { display:block; animation:conveyor-float 2.8s ease-in-out infinite; animation-delay:var(--float-delay); }
     @keyframes status-in { from { opacity:0; transform:translate(-50%,calc(-50% + 16px)) scale(.98); } to { opacity:1; transform:translate(-50%,-50%) scale(1); } }
     @keyframes status-out { to { opacity:0; visibility:hidden; transform:translate(-50%,calc(-50% - 12px)) scale(.98); } }
-    @keyframes ingredient-flow { 0% { opacity:0; transform:translateX(-42px) translateY(2px); } 14% { opacity:1; } 78% { opacity:1; } 100% { opacity:0; transform:translateX(42px) translateY(-2px); } }
+    @keyframes conveyor-float { 50% { transform:translateY(-2px); } }
     .error { margin:16px 0 0; color:var(--danger); font-weight:650; }
     .screen[hidden] { display:none; }
     #resultsScreen:not([hidden]) { min-height:100vh; display:flex; flex-direction:column; justify-content:center; }
@@ -150,7 +152,7 @@
           <div class="field"><label for="difficultyFilter">난이도</label><div class="custom-select" data-select-id="difficultyFilter"><button class="select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="difficultyFilterOptions"><span class="select-value">상관없음</span><span class="select-chevron" aria-hidden="true">⌄</span></button><div class="select-menu" id="difficultyFilterOptions" role="listbox" hidden><button class="select-option" type="button" role="option" data-value="" aria-selected="true">상관없음</button><button class="select-option" type="button" role="option" data-value="쉬움" aria-selected="false">쉬움</button><button class="select-option" type="button" role="option" data-value="보통" aria-selected="false">보통</button><button class="select-option" type="button" role="option" data-value="어려움" aria-selected="false">어려움</button></div><select id="difficultyFilter" class="native-filter" tabindex="-1" aria-hidden="true"><option value="">상관없음</option><option>쉬움</option><option>보통</option><option>어려움</option></select></div></div>
           <div class="field"><label for="dietFilter">식이 제한</label><input id="dietFilter" placeholder="예: 땅콩 알레르기"></div>
         </div>
-        <div class="actions"><div class="status" id="status" role="status" aria-live="polite"><div class="status-content"><span class="status-text" id="statusText"></span><div class="status-ingredients" aria-hidden="true"><span class="status-ingredient-line" id="statusIngredientLine"></span></div></div></div><button class="button" id="recommendButton" type="button">메뉴 추천받기 →</button></div>
+        <div class="actions"><div class="status" id="status" role="status" aria-live="polite"><div class="status-content"><span class="status-text" id="statusText"></span><div class="status-ingredients" aria-hidden="true"><div class="status-conveyor" id="statusConveyor"></div></div></div></div><button class="button" id="recommendButton" type="button">메뉴 추천받기 →</button></div>
         <p class="error" id="ingredientError" role="alert"></p>
       </div>
     </section>
@@ -193,11 +195,13 @@
     const normalized = (value) => value.trim().replace(/\s+/g,' ').toLocaleLowerCase('ko-KR');
 
     function showScreen(screen) { state.screen=screen; if(screen!=='ingredients') heroDismissed=true; hero.hidden=heroDismissed; Object.entries(screens).forEach(([name,node]) => { node.hidden=name!==screen; }); window.scrollTo({top:0,behavior:'smooth'}); }
-    const ingredientCombos=[['🥬','🥕','🍅','🥚','🧅','🍄'],['🍤','🥩','🥦','🌽','🥕','🍳'],['🧀','🍝','🥬','🍅','🫑','🥔'],['🍗','🥒','🌶️','🍚','🧄','🍋'],['🥓','🍆','🌽','🧅','🍠','🥚']];
-    let ingredientTimer=0; let lastIngredientCombo=-1;
-    function nextIngredientCombo() { let index; do { index=Math.floor(Math.random()*ingredientCombos.length); } while(index===lastIngredientCombo); lastIngredientCombo=index; const items=[...ingredientCombos[index]]; for(let i=items.length-1;i>0;i-=1){ const j=Math.floor(Math.random()*(i+1)); [items[i],items[j]]=[items[j],items[i]]; } const line=$('#statusIngredientLine'); line.classList.remove('status-ingredient-line'); void line.offsetWidth; line.textContent=items.join(' '); line.classList.add('status-ingredient-line'); }
-    function startIngredientAnimation() { clearInterval(ingredientTimer); nextIngredientCombo(); ingredientTimer=setInterval(nextIngredientCombo,1900); }
-    function stopIngredientAnimation() { clearInterval(ingredientTimer); ingredientTimer=0; }
+    const conveyorFoods=['🥬','🥕','🍅','🥚','🧅','🍄','🍤','🥩','🥦','🌽','🧀','🍝','🫑','🥔','🍗','🥒','🌶️','🍚','🧄','🍋','🥓','🍆','🍠'];
+    let conveyorFrame=0; let conveyorLastTime=0; let conveyorRunning=false; let conveyorItems=[]; let recentFoods=[];
+    function randomConveyorFood() { const options=conveyorFoods.filter(food=>!recentFoods.includes(food)); const food=options[Math.floor(Math.random()*options.length)]||conveyorFoods[Math.floor(Math.random()*conveyorFoods.length)]; recentFoods=[...recentFoods.slice(-3),food]; return food; }
+    function addConveyorItem(x) { const item=document.createElement('span'); item.className='conveyor-item'; item.style.setProperty('--float-delay',`${(Math.random()*1.4).toFixed(2)}s`); const glyph=document.createElement('span'); glyph.className='conveyor-glyph'; glyph.textContent=randomConveyorFood(); item.append(glyph); $('#statusConveyor').append(item); const entry={node:item,x}; conveyorItems.push(entry); item.style.transform=`translate3d(${x}px,0,0)`; return entry; }
+    function startIngredientAnimation() { stopIngredientAnimation(); conveyorRunning=true; recentFoods=[]; const width=$('#statusConveyor').clientWidth; let x=-36; while(x<width+36){ addConveyorItem(x); x+=38+Math.random()*18; } conveyorLastTime=performance.now(); conveyorFrame=requestAnimationFrame(moveConveyor); }
+    function moveConveyor(time) { if(!conveyorRunning) return; const conveyor=$('#statusConveyor'); const delta=Math.min((time-conveyorLastTime)/1000,.05); conveyorLastTime=time; const speed=42; conveyorItems.forEach(item=>{ item.x+=speed*delta; item.node.style.transform=`translate3d(${item.x.toFixed(1)}px,0,0)`; }); const width=conveyor.clientWidth; conveyorItems=conveyorItems.filter(item=>{ if(item.x>width+36){ item.node.remove(); return false; } return true; }); const last=conveyorItems.reduce((max,item)=>Math.max(max,item.x),-40); if(last<width+36) addConveyorItem(last+38+Math.random()*18); conveyorFrame=requestAnimationFrame(moveConveyor); }
+    function stopIngredientAnimation() { conveyorRunning=false; cancelAnimationFrame(conveyorFrame); conveyorFrame=0; conveyorItems.forEach(item=>item.node.remove()); conveyorItems=[]; }
     function setStatus(message='') { const status=$('#status'); $('#statusText').textContent=message; if(message){ startIngredientAnimation(); status.classList.remove('is-leaving'); status.classList.add('is-visible'); } else { stopIngredientAnimation(); status.classList.remove('is-visible'); status.classList.add('is-leaving'); } }
     function setError(message='', target='#ingredientError') { $('#ingredientError').textContent=''; $('#resultError').textContent=''; if(message) $(target).textContent=message; state.error=message; }
     function renderTags() { const grid=$('#ingredientGrid'); grid.replaceChildren(); INGREDIENTS.forEach((name,index) => { const button=el('button','tag',name); button.style.setProperty('--chip-delay',`${index*.08}s`); if(ingredientsScreen.dataset.chipsEntered) button.classList.add('chip-entered'); button.type='button'; button.classList.toggle('selected',state.selectedIngredients.some(item=>normalized(item)===normalized(name))); button.setAttribute('aria-pressed',String(button.classList.contains('selected'))); button.addEventListener('click',()=>toggleIngredient(name)); grid.append(button); }); }
