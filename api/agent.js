@@ -52,8 +52,9 @@ async function searchRecipes(queryEmbedding, config, cuisines = []) {
     },
     body: JSON.stringify({
       query_embedding: queryEmbedding,
-      match_threshold: 0.05,
-      match_count: 200,
+      // 선택 카테고리 안에서는 유사도보다 카테고리 후보 확보를 우선합니다.
+      match_threshold: -1,
+      match_count: 500,
       selected_cuisines: cuisines
     })
   });
@@ -66,7 +67,7 @@ async function searchRecipes(queryEmbedding, config, cuisines = []) {
         apikey: config.supabaseKey,
         authorization: `Bearer ${config.supabaseKey}`
       },
-      body: JSON.stringify({ query_embedding: queryEmbedding, match_threshold: 0.05, match_count: 1000 })
+      body: JSON.stringify({ query_embedding: queryEmbedding, match_threshold: -1, match_count: 2000 })
     });
     if (!legacyResponse.ok) throw new Error(`Supabase search failed (${legacyResponse.status})`);
     return legacyResponse.json();
@@ -171,11 +172,20 @@ module.exports = async function handler(req, res) {
     const filters = body.filters && typeof body.filters === 'object' ? body.filters : {};
     const exclude = Array.isArray(body.exclude) ? body.exclude.filter(item => typeof item === 'string').slice(0, 20) : [];
     const query = `${body.ingredients.join(', ')} ${cuisines.join(', ')} ${filters.time || ''} ${filters.difficulty || ''} ${filters.diet || ''}`;
-    const hits = await searchRecipes(await embed(query, config.openai), config, cuisines);
-    if (!hits.length) return res.status(404).json({ error: '관련 레시피를 찾지 못했습니다.' });
+    const queryEmbedding = await embed(query, config.openai);
+    let hits = await searchRecipes(queryEmbedding, config, cuisines);
     // 같은 레시피의 여러 청크가 후보 수를 차지하지 않도록 메뉴 단위로 중복을 제거합니다.
     const uniqueHits = [...new Map(hits.map(hit => [hit.recipe_name, hit])).values()];
-    const cuisineHits = filterByCuisine(uniqueHits, cuisines);
+    let cuisineHits = filterByCuisine(uniqueHits, cuisines);
+    // 구형 RPC가 아직 배포된 경우에도 카테고리 전용 질의로 후보 3개를 추가 확보합니다.
+    if (cuisines.length && cuisineHits.length < 3) {
+      const cuisineQuery = `${cuisines.join(', ')} 대표 요리 레시피`;
+      const cuisineQueryHits = await searchRecipes(await embed(cuisineQuery, config.openai), config, cuisines);
+      hits = [...hits, ...cuisineQueryHits];
+      const mergedHits = [...new Map(hits.map(hit => [hit.recipe_name, hit])).values()];
+      cuisineHits = filterByCuisine(mergedHits, cuisines);
+    }
+    if (!hits.length) return res.status(404).json({ error: '관련 레시피를 찾지 못했습니다.' });
     if (cuisines.length && !cuisineHits.length) {
       return res.status(200).json({ menus: [], cuisines, message: '선택하신 음식 종류에 맞는 레시피를 찾지 못했어요. 다른 재료나 음식 종류를 선택해보세요.' });
     }
