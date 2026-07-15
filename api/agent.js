@@ -438,9 +438,9 @@ function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = t
       cookTime: resolveCookTime('', hit?.content, menu?.recipe),
       ingredients: requiredIngredients,
       missingIngredients: expectedMissing,
-      // 생성 단계가 충분하면 요청한 간결한 조리 형식을 사용하고,
-      // 생성이 누락된 경우에만 검색 원문의 상세 순서로 보완합니다.
-      recipe: generatedRecipe.length >= sourceRecipe.length ? generatedRecipe : sourceRecipe
+      // 검색 원문에 완전한 조리 순서가 있으면 검증된 원문을 우선 사용합니다.
+      // 모델 생성 단계는 원문이 없을 때만 보완용으로 사용해 오타와 부실한 설명을 줄입니다.
+      recipe: sourceRecipe.length ? sourceRecipe : generatedRecipe
     }
   };
 }
