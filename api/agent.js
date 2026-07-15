@@ -396,8 +396,10 @@ function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = t
   }
   if (matchedIngredients.length < 1) failures.push('사용자 재료와 실제 교집합 없음');
   if (!sameIngredientList(menu?.missingIngredients, expectedMissing)) failures.push('missingIngredients 계산 불일치');
-  const generatedRecipe = cleanRecipeSteps(menu?.steps || menu?.recipe);
-  const sourceRecipe = hasCompleteRecipeSource(hit?.content) ? cleanRecipeSteps(extractRecipeSteps(hit?.content)) : [];
+  const generatedRecipe = addIngredientQuantities(cleanRecipeSteps(menu?.steps || menu?.recipe), requiredIngredients);
+  const sourceRecipe = hasCompleteRecipeSource(hit?.content)
+    ? addIngredientQuantities(cleanRecipeSteps(extractRecipeSteps(hit?.content)), requiredIngredients)
+    : [];
   return {
     ok: failures.length === 0,
     failures,
@@ -498,6 +500,37 @@ function cleanRecipeSteps(recipe) {
   }).filter(step => !RECIPE_METADATA_LINE.test(step));
 }
 
+// 단계에 재료명만 있고 수량이 빠진 경우, 필요 재료 목록의 수량을 보강합니다.
+function addIngredientQuantities(steps, ingredients) {
+  const quantities = (Array.isArray(ingredients) ? ingredients : [])
+    .map(value => {
+      const text = ensureIngredientQuantity(value);
+      const match = text.match(/\d+(?:[./]\d+)?\s*(?:kg|g|mg|ml|l|개|알|장|봉|팩|캔|컵|큰술|작은술|스푼|쪽|대|줄|마리|근|인분)/i);
+      if (!match) return null;
+      const name = text.slice(0, match.index).trim().replace(/[([{（].*$/u, '').trim();
+      if (!name) return null;
+      return { name, quantity: match[0].trim() };
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.name.length - left.name.length);
+
+  return (Array.isArray(steps) ? steps : []).map(step => {
+    let result = String(step || '');
+    quantities.forEach(({ name, quantity }) => {
+      const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const pattern = new RegExp(`(?<![가-힣])(${escapedName})(을|를|은|는|이|가|와|과|도|만|에|으로|로)?(?![가-힣])`, 'gu');
+      result = result.replace(pattern, (match, ingredientName, particle, offset, fullText) => {
+        const before = fullText.slice(Math.max(0, offset - 12), offset);
+        const after = fullText.slice(offset + match.length, offset + match.length + 12);
+        const quantityPattern = /\d+(?:[./]\d+)?\s*(?:kg|g|mg|ml|l|개|알|장|봉|팩|캔|컵|큰술|작은술|스푼|쪽|대|줄|마리|근|인분)/i;
+        if (/^\s*\d/.test(after) && quantityPattern.test(after) || quantityPattern.test(before) && /\s*$/.test(before)) return match;
+        return `${ingredientName} ${quantity}${particle || ''}`;
+      });
+    });
+    return result.replace(/[ \t]{2,}/g, ' ').trim();
+  });
+}
+
 function normalizeRecipeName(name) {
   return String(name || '')
     .trim()
@@ -550,7 +583,8 @@ function fallbackMenuFromHit(hit, ownedIngredients) {
 // 이 경로는 RAG 후보 검증 실패 시에만 사용하며, 사용자 입력을 중심으로 한 OpenAI 결과를 보존합니다.
 function usableGeneratedMenu(menu, ownedIngredients) {
   const name = normalizeRecipeName(menu?.name);
-  const recipe = cleanRecipeSteps(menu?.steps || menu?.recipe);
+  const ingredients = Array.isArray(menu?.ingredients) ? menu.ingredients : ownedIngredients;
+  const recipe = addIngredientQuantities(cleanRecipeSteps(menu?.steps || menu?.recipe), ingredients);
   if (!name || !recipe.length) return null;
   return {
     name,
@@ -559,7 +593,7 @@ function usableGeneratedMenu(menu, ownedIngredients) {
     recipe,
     cookTime: String(menu?.cookTime || '20분').trim(),
     difficulty: /^(쉬움|보통|어려움)$/.test(menu?.difficulty) ? menu.difficulty : '보통',
-    ingredients: Array.isArray(menu?.ingredients) && menu.ingredients.length ? menu.ingredients : ownedIngredients,
+    ingredients,
     missingIngredients: Array.isArray(menu?.missingIngredients) ? menu.missingIngredients : [],
     tags: Array.isArray(menu?.tags) ? menu.tags : []
   };
