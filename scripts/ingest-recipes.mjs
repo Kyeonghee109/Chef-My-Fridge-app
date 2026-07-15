@@ -5,7 +5,8 @@ if (!OPENAI_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error('OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY가 필요합니다.');
 }
 
-const BATCH_SIZE = Number(process.env.INGEST_BATCH_SIZE || 50);
+// vector(1536) payload와 HNSW 인덱스 갱신으로 statement timeout이 날 수 있어 기본값을 작게 잡습니다.
+const BATCH_SIZE = Number(process.env.INGEST_BATCH_SIZE || 10);
 const MAX_RETRIES = 3;
 const PAGE_SIZE = 1000;
 const recipeDataPath = process.env.RECIPE_DATA_PATH || new URL('../rag-agent/data/recipes.json', import.meta.url);
@@ -116,6 +117,19 @@ async function upsertBatch(batch) {
   if (!response.ok) throw new Error(`Supabase upsert failed: ${response.status} ${await response.text()}`);
 }
 
+async function upsertWithSplit(batch) {
+  try {
+    await upsertBatch(batch);
+    return;
+  } catch (error) {
+    if (batch.length === 1) throw error;
+    const middle = Math.ceil(batch.length / 2);
+    console.warn(`배치 ${batch.length}개 처리 실패, ${middle}개 + ${batch.length - middle}개로 분할 재처리: ${error.message}`);
+    await upsertWithSplit(batch.slice(0, middle));
+    await upsertWithSplit(batch.slice(middle));
+  }
+}
+
 const existingRows = await fetchExistingRows();
 const existingKeyContents = new Map(existingRows.filter(row => row.chunk_key).map(row => [row.chunk_key, row.content]));
 const existingContents = new Set(existingRows.map(row => `${row.recipe_name}\u0000${row.content}`));
@@ -133,10 +147,11 @@ let completed = chunks.length - pendingChunks.length;
 for (let start = 0; start < pendingChunks.length; start += BATCH_SIZE) {
   const batch = pendingChunks.slice(start, start + BATCH_SIZE);
   try {
-    await upsertBatch(batch);
+    await upsertWithSplit(batch);
   } catch (error) {
     failures.push(...batch.map(chunk => ({ id: chunk.recipe_id, chunk_key: chunk.chunk_key, title: chunk.recipe_name, error: error.message })));
     console.error(`배치 실패 후 다음 배치로 진행: ${batch[0].chunk_key} ~ ${batch.at(-1).chunk_key}`);
+    console.error(`실패 원문: ${error.message}`);
   }
   completed += batch.length;
   console.log(`인덱싱 진행: ${completed}/${chunks.length}`);
