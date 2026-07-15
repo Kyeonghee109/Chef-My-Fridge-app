@@ -218,22 +218,12 @@ module.exports = async function handler(req, res) {
     const queryEmbedding = await embed(query, config.openai);
     const selectedHits = await searchRecipes(queryEmbedding, config, cuisines);
     const selectedUniqueHits = [...new Map(selectedHits.map(hit => [hit.recipe_name, hit])).values()];
-    let preferredHits = filterByCuisine(selectedUniqueHits, cuisines);
-    let allHits = selectedUniqueHits;
-
-    // 선택한 카테고리만으로 3개가 안 되면 전체 카테고리에서 추가 후보를 확보합니다.
-    if (cuisines.length && preferredHits.length < 3) {
-      const allCategoryHits = await searchRecipes(queryEmbedding, config, []);
-      allHits = [...new Map([...selectedUniqueHits, ...allCategoryHits].map(hit => [hit.recipe_name, hit])).values()];
-      preferredHits = filterByCuisine(allHits, cuisines);
-    }
-    if (!allHits.length) return res.status(404).json({ error: '관련 레시피를 찾지 못했습니다.' });
+    const preferredHits = filterByCuisine(selectedUniqueHits, cuisines);
+    const allHits = cuisines.length ? preferredHits : selectedUniqueHits;
+    if (!allHits.length) return res.status(404).json({ error: '선택한 음식 종류의 레시피를 찾지 못했습니다.' });
 
     // 선택 카테고리를 앞에 배치하고 부족한 수는 다른 카테고리로 채웁니다.
-    const cuisineHits = cuisines.length
-      ? [...preferredHits, ...allHits.filter(hit => !preferredHits.some(item => item.recipe_name === hit.recipe_name))]
-      : allHits;
-    const usedFallbackCuisine = cuisines.length && preferredHits.length < 3;
+    const cuisineHits = allHits;
     const enrichedHits = cuisineHits.map(hit => ({
       ...hit,
       requiredIngredients: extractRecipeIngredients(hit.content),
@@ -296,7 +286,7 @@ module.exports = async function handler(req, res) {
       menus: menus.slice(0, 3),
       cuisines,
       sources: cuisineHits.map(hit => hit.recipe_name),
-      message: usedFallbackCuisine ? '선택한 음식 종류가 부족해 다른 음식 종류의 메뉴를 함께 추천했어요.' : undefined
+      message: undefined
     });
   } catch (error) {
     console.error('Recommendation request failed:', error.message);
