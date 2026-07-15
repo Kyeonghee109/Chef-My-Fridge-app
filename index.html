@@ -25,11 +25,12 @@
     .hero { display:grid; align-items:center; min-height:100vh; margin-bottom:0; opacity:var(--hero-opacity,1); transform:translateY(var(--hero-y,0px)) scale(var(--hero-scale,1)); transform-origin:center top; will-change:opacity,transform; }
     .hero[hidden] { display:none; }
     .hero-mark { position:relative; display:grid; place-items:center; min-height:420px; max-width:960px; margin:0 auto; overflow:hidden; isolation:isolate; background:transparent; }
+    .hero-mark::before { content:""; position:absolute; z-index:1; width:min(84%,840px); aspect-ratio:2.35; border-radius:50%; pointer-events:none; background:radial-gradient(ellipse at center,rgba(244,244,242,.96) 0%,rgba(244,244,242,.78) 46%,rgba(244,244,242,0) 74%); }
     .hero-copy { position:relative; z-index:2; max-width:800px; padding:32px; color:var(--muted); font-size:1.05rem; text-align:center; }
     .hero-copy h1 { margin:0 0 18px; animation:hero-title-in .8s cubic-bezier(.22,1,.36,1) both; }
     .hero-copy > p:last-child { white-space:nowrap; }
     .hero-copy > p:last-child { animation:hero-copy-in .8s .15s cubic-bezier(.22,1,.36,1) both; }
-    .hero-food { position:absolute; left:var(--left); top:var(--top); z-index:1; font-size:var(--size); line-height:1; user-select:none; pointer-events:none; transform:translate(0,0); opacity:0; animation:hero-icon-in .7s cubic-bezier(.22,1,.36,1) var(--entrance) both; transition:transform .45s ease-out; }
+    .hero-food { position:absolute; left:var(--left); top:var(--top); z-index:0; font-size:var(--size); line-height:1; user-select:none; pointer-events:none; transform:translate(0,0); opacity:0; animation:hero-icon-in .7s cubic-bezier(.22,1,.36,1) var(--entrance) both; transition:transform .45s ease-out; }
     .hero-food-glyph { display:block; animation-duration:var(--duration); animation-timing-function:ease-in-out; animation-iteration-count:infinite; animation-direction:alternate; animation-delay:var(--delay); }
     .float-bacon { animation-name:float-bacon; } .float-shrimp { animation-name:float-shrimp; } .float-curry { animation-name:float-curry; } .float-pan { animation-name:float-pan; } .float-pasta { animation-name:float-pasta; } .float-egg { animation-name:float-egg; } .float-salad { animation-name:float-salad; }
     @keyframes hero-title-in { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
