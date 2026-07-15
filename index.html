@@ -67,6 +67,8 @@
     .selected { display:flex; flex-wrap:wrap; gap:8px; min-height:28px; margin:10px 0 0; }
     .chip { display:inline-flex; align-items:center; gap:6px; padding:7px 10px; border:1px solid #46645624; border-radius:999px; color:var(--green); background:var(--mint); box-shadow:0 1px 4px #292a270f; font-size:.9rem; }
     .chip-icon { font-size:1rem; line-height:1; }
+    .scallion-icon { display:inline-flex; align-items:center; width:18px; height:18px; }
+    .scallion-icon svg { width:18px; height:18px; overflow:visible; }
     .chip-remove { display:inline-grid; place-items:center; width:18px; height:18px; padding:0; border:0; border-radius:50%; color:inherit; background:transparent; font-size:.9rem; line-height:1; }
     .chip-remove:hover, .chip-remove:focus-visible { color:var(--ink); background:#fff8; }
     .actions { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:14px; margin-top:28px; }
@@ -194,8 +196,8 @@
 
     <section class="screen story-selection" id="ingredientsScreen">
       <div class="panel">
-        <div class="ingredient-guide"><span class="ingredient-guide-icon" aria-hidden="true">🍴</span><p>냉장고 속 재료를 선택하면 AI가<br>지금 만들 수 있는 메뉴를 추천해드려요.</p></div>
         <div class="panel-head"><div><p class="eyebrow">01 / Ingredients</p><h2>냉장고를 열어볼까요?</h2></div><p class="muted">재료를 하나 이상 골라주세요.</p></div>
+        <div class="ingredient-guide"><span class="ingredient-guide-icon" aria-hidden="true">🍴</span><p>냉장고 속 재료를 선택하면 AI가<br>지금 만들 수 있는 메뉴를 추천해드려요.</p></div>
         <div class="tag-grid" id="ingredientGrid"></div>
         <form class="custom-form" id="customForm"><input id="customInput" aria-label="기타 재료" placeholder="기타 재료를 입력해보세요 (예: 참깨, 마요네즈)"><button class="button secondary" type="submit">재료 추가</button></form>
         <div class="selected-head"><p class="selected-label">🧺 선택한 재료</p><button class="clear-selected" id="clearIngredients" type="button">전체 지우기</button></div>
@@ -288,7 +290,8 @@
     function renderCuisineTags() { const grid=$('#cuisineGrid'); grid.replaceChildren(); CUISINES.forEach((name,index) => { const button=el('button','tag',name); button.style.setProperty('--chip-delay',`${(INGREDIENTS.length+index)*.08}s`); if(ingredientsScreen.dataset.chipsEntered) button.classList.add('chip-entered'); button.type='button'; button.classList.toggle('selected',state.selectedCuisines.includes(name)); button.setAttribute('aria-pressed',String(state.selectedCuisines.includes(name))); button.addEventListener('click',()=>toggleCuisine(name)); grid.append(button); }); }
     const ingredientEmojis = { '계란':'🥚','두부':'🧊','닭가슴살':'🍗','돼지고기':'🥩','소고기':'🥩','참치캔':'🐟','햄':'🥓','베이컨':'🥓','김치':'🥬','양파':'🧅','대파':'🌿','마늘':'🧄','감자':'🥔','당근':'🥕','애호박':'🥒','버섯':'🍄','시금치':'🥬','브로콜리':'🥦','토마토':'🍅','양배추':'🥬','오이':'🥒','고추':'🌶️','밥':'🍚','파스타면':'🍝','우유':'🥛','치즈':'🧀','밀가루':'🌾','간장':'🫙','고추장':'🫙','참기름':'🫙','어묵':'🍢','떡':'🍡','연어':'🐟','새우':'🍤','우동면':'🍜' };
     const ingredientEmoji = name => ingredientEmojis[name] || '🥕';
-    function renderSelected() { const wrap=$('#selectedIngredients'); wrap.replaceChildren(); if(!state.selectedIngredients.length) { wrap.append(el('span','muted','선택한 재료가 여기에 표시됩니다.')); return; } state.selectedIngredients.forEach(name=>{ const chip=el('span','chip'); chip.append(el('span','chip-icon',ingredientEmoji(name)),text(name)); const remove=el('button','chip-remove', '×'); remove.type='button'; remove.setAttribute('aria-label',`${name} 삭제`); remove.addEventListener('click',()=>removeIngredient(name)); chip.append(remove); wrap.append(chip); }); }
+    const ingredientIcon = name => { if(name!=='대파') return el('span','chip-icon',ingredientEmoji(name)); const icon=el('span','chip-icon scallion-icon'); icon.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21c1-5 2-9 5-14M11 21c1-6 4-10 7-14M15 21c1-5 4-8 6-10" fill="none" stroke="#466456" stroke-width="2" stroke-linecap="round"/><path d="M5 7c3 1 5 3 6 6-4 0-7-2-8-5 0-1 1-1 2-1Zm8-1c3 0 6 1 8 4-3 2-6 1-8-1-1-1-1-2 0-3Z" fill="#8eae8e" stroke="#466456" stroke-width="1.2" stroke-linejoin="round"/></svg>'; return icon; };
+    function renderSelected() { const wrap=$('#selectedIngredients'); wrap.replaceChildren(); if(!state.selectedIngredients.length) { wrap.append(el('span','muted','선택한 재료가 여기에 표시됩니다.')); return; } state.selectedIngredients.forEach(name=>{ const chip=el('span','chip'); chip.append(ingredientIcon(name),text(name)); const remove=el('button','chip-remove', '×'); remove.type='button'; remove.setAttribute('aria-label',`${name} 삭제`); remove.addEventListener('click',()=>removeIngredient(name)); chip.append(remove); wrap.append(chip); }); }
     function renderIngredients() { renderTags(); renderCuisineTags(); renderSelected(); }
     function addIngredients(values) { const existing=new Set(state.selectedIngredients.map(normalized)); values.map(value=>value.trim()).filter(Boolean).forEach(value=>{ const key=normalized(value); if(!existing.has(key)){ state.selectedIngredients.push(value); existing.add(key); } }); renderIngredients(); }
     function toggleIngredient(name) { const index=state.selectedIngredients.findIndex(item=>normalized(item)===normalized(name)); if(index===-1) state.selectedIngredients.push(name); else state.selectedIngredients.splice(index,1); setError(); renderIngredients(); }
