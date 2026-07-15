@@ -19,6 +19,7 @@
     .eyebrow { margin:0 0 12px; color:var(--green); font-size:.78rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
     h1 { max-width:760px; margin:0; font-size:clamp(1rem,4.3vw,2.15rem); line-height:1.2; font-weight:500; letter-spacing:-.05em; white-space:nowrap; font-family:GmarketSansMedium,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
     h2 { margin:0; font-size:2.2rem; letter-spacing:-.06em; }
+    .heading-highlight { padding:0 .08em; border-radius:10px; background:linear-gradient(to bottom,transparent 58%,#dcebe1 58%,#dcebe1 88%,transparent 88%); box-decoration-break:clone; -webkit-box-decoration-break:clone; }
     h3 { margin:0; font-size:1.2rem; letter-spacing:-.035em; }
     p { line-height:1.7; }
     .hero { display:grid; align-items:center; min-height:100vh; margin-bottom:0; opacity:var(--hero-opacity,1); transform:translateY(var(--hero-y,0px)) scale(var(--hero-scale,1)); transform-origin:center top; will-change:opacity,transform; }
@@ -159,7 +160,7 @@
     </section>
 
     <section class="screen" id="resultsScreen" hidden>
-      <div class="results-head"><div><p class="eyebrow">02 / Recommendations</p><h2>이런 메뉴는 어때요?</h2><p class="muted" id="resultSummary"></p></div><div><button class="button secondary" id="anotherButton" type="button">다른 메뉴 추천</button></div></div>
+      <div class="results-head"><div><p class="eyebrow">02 / Recommendations</p><h2>이런 <span class="heading-highlight">메뉴는 어때요?</span></h2><p class="muted" id="resultSummary"></p></div><div><button class="button secondary" id="anotherButton" type="button">다른 메뉴 추천</button></div></div>
       <div class="card-grid" id="menuGrid"></div><p class="error" id="resultError" role="alert"></p>
       <div class="actions"><button class="button ghost" id="backToIngredients">← 재료 다시 고르기</button></div>
     </section>
