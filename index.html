@@ -93,7 +93,7 @@
     .heart-button { display:inline-grid; place-items:center; width:32px; height:32px; padding:0; border:1px solid var(--line); border-radius:50%; color:var(--muted); background:transparent; font-size:1.25rem; line-height:1; transition:color .15s ease-out,background-color .15s ease-out,transform .15s ease-out; }
     .heart-button:hover, .heart-button:focus-visible { color:var(--green); background:var(--mint); transform:scale(1.03); outline:none; }
     .heart-button.is-liked { border-color:#46645642; color:var(--green); background:var(--mint); }
-    .detail-actions { display:flex; flex-wrap:wrap; gap:8px; }
+    .detail-back { display:flex; }
     .detail-favorite.is-liked { color:var(--green); background:var(--mint); }
     .menu-card p { flex:1; color:var(--muted); }
     .menu-card .menu-category { flex:0 0 auto; }
@@ -111,8 +111,9 @@
     .difficulty-icon b:nth-child(2) { height:10px; }
     .difficulty-icon b:nth-child(3) { height:14px; }
     .meta-cuisine { color:#216b51; background:#dcefe5; }
-    .detail-layout { display:grid; grid-template-columns:.75fr 1.25fr; gap:28px; }
-    .detail-intro { padding:28px; border-radius:16px; color:var(--paper); background:#3f574a; }
+    .detail-layout { display:grid; grid-template-columns:.75fr 1.25fr; align-items:start; gap:28px; }
+    .detail-side { display:grid; align-self:start; gap:14px; }
+    .detail-intro { height:fit-content; padding:28px; border-radius:16px; color:var(--paper); background:#3f574a; }
     .detail-intro .eyebrow, .detail-intro .muted { color:#c7e4d7; }
     .detail-intro .meta-difficulty { padding:7px 11px; background:#e8efe9; }
     .detail-intro .meta-easy { color:#16A34A; }
@@ -194,7 +195,7 @@
     </section>
 
     <section class="screen" id="detailScreen" hidden>
-      <div class="detail-layout"><aside class="detail-intro"><div class="detail-topline"><p class="eyebrow">03 / Recipe</p><button class="heart-button detail-favorite" id="detailFavoriteButton" type="button" aria-label="즐겨찾기">♡</button></div><h2 id="detailName"></h2><p id="detailDescription"></p><div class="meta" id="detailMeta"></div><div class="detail-actions"><button class="button secondary" id="detailBack" type="button">← 추천 목록</button></div></aside><article class="panel"><div class="detail-section"><h3>필요한 재료</h3><ul class="ingredient-list" id="detailIngredients"></ul><p class="missing-ingredients" id="missingIngredients" hidden></p></div><div class="detail-section"><h3>만드는 순서</h3><ol class="recipe-list" id="detailRecipe"></ol></div><p class="disclaimer">레시피는 AI가 생성한 참고 정보입니다. 알레르기와 식재료 상태를 직접 확인한 후 조리하세요.</p></article></div>
+      <div class="detail-layout"><div class="detail-side"><aside class="detail-intro"><div class="detail-topline"><p class="eyebrow">03 / Recipe</p><button class="heart-button detail-favorite" id="detailFavoriteButton" type="button" aria-label="즐겨찾기">♡</button></div><h2 id="detailName"></h2><p id="detailDescription"></p><div class="meta" id="detailMeta"></div></aside><div class="detail-back"><button class="button secondary" id="detailBack" type="button">← 추천 목록</button></div></div><article class="panel"><div class="detail-section"><h3>필요한 재료</h3><ul class="ingredient-list" id="detailIngredients"></ul><p class="missing-ingredients" id="missingIngredients" hidden></p></div><div class="detail-section"><h3>만드는 순서</h3><ol class="recipe-list" id="detailRecipe"></ol></div><p class="disclaimer">레시피는 AI가 생성한 참고 정보입니다. 알레르기와 식재료 상태를 직접 확인한 후 조리하세요.</p></article></div>
     </section>
     <footer>현재 선택과 추천 결과는 이 브라우저 세션에서만 유지됩니다.</footer>
   </main>
