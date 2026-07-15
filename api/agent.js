@@ -321,6 +321,37 @@ function resolveCookTime(value, content, recipe = []) {
   return `${Math.min(Math.max(estimatedMinutes || 20, 5), 180)}분`;
 }
 
+// 조리시간 필터를 고르지 않았을 때 짧은·보통·여유 시간대 메뉴가 섞이도록 분류합니다.
+function cookTimeBucket(value) {
+  const minutes = Number(String(value || '').match(/\d+/)?.[0]);
+  if (!Number.isFinite(minutes)) return 'unknown';
+  if (minutes <= 15) return 'quick';
+  if (minutes <= 30) return 'standard';
+  return 'leisurely';
+}
+
+function selectCookTimeDiverseMenus(candidates, topK = 3) {
+  const selected = [];
+  const selectedNames = new Set();
+  const usedBuckets = new Set();
+  for (const candidate of candidates) {
+    if (!candidate?.name || selectedNames.has(normalizeRecipeName(candidate.name))) continue;
+    const bucket = cookTimeBucket(candidate.cookTime);
+    if (bucket === 'unknown' || usedBuckets.has(bucket)) continue;
+    selected.push(candidate);
+    selectedNames.add(normalizeRecipeName(candidate.name));
+    usedBuckets.add(bucket);
+    if (selected.length >= topK) return selected;
+  }
+  for (const candidate of candidates) {
+    if (!candidate?.name || selectedNames.has(normalizeRecipeName(candidate.name))) continue;
+    selected.push(candidate);
+    selectedNames.add(normalizeRecipeName(candidate.name));
+    if (selected.length >= topK) break;
+  }
+  return selected;
+}
+
 // 사용자가 고른 재료를 기준으로 레시피의 부족 재료를 서버에서 확정합니다.
 function calculateMissingIngredients(ownedIngredients, requiredIngredients) {
   const owned = new Set((Array.isArray(ownedIngredients) ? ownedIngredients : []).map(canonicalIngredient).filter(Boolean));
@@ -574,7 +605,7 @@ module.exports = async function handler(req, res) {
     const seenGeneratedNames = new Set();
     const validationFailures = [];
     const strictCuisine = cuisines.length > 0;
-    const menus = generatedMenus.map(menu => {
+    let menus = generatedMenus.map(menu => {
       const hit = findHit(menu.name);
       if (!hit || excludedNames.has(hit?.recipe_name) || seenGeneratedNames.has(hit?.recipe_name)) {
         validationFailures.push({ menu: menu?.name || '(이름 없음)', reasons: [!hit ? '검색 후보에 없는 메뉴' : '중복 또는 제외 메뉴'] });
@@ -630,6 +661,22 @@ module.exports = async function handler(req, res) {
       if (seenNames.has(normalizedMenuName(generated.name)) || exclude.some(name => normalizedMenuName(name) === normalizedMenuName(generated.name))) continue;
       menus.push(generated);
       seenNames.add(normalizedMenuName(generated.name));
+    }
+
+    // 시간 필터를 지정하지 않은 경우에만 후보군을 넓혀 조리시간 다양성을 보정합니다.
+    if (!filters.time && menus.length >= 1) {
+      const timeDiversityCandidates = [...menus];
+      const candidateNames = new Set(timeDiversityCandidates.map(menu => normalizedMenuName(menu.name)));
+      for (const hit of rankedHits) {
+        if (timeDiversityCandidates.length >= 12) break;
+        if (candidateNames.has(normalizedMenuName(hit.recipe_name)) || excludedNames.has(hit.recipe_name)) continue;
+        const fallback = fallbackMenuFromHit(hit, body.ingredients);
+        const validation = validateMenu(fallback, { hit, ownedIngredients: body.ingredients, cuisines, strictCuisine });
+        if (!validation.ok) continue;
+        timeDiversityCandidates.push(validation.value);
+        candidateNames.add(normalizedMenuName(hit.recipe_name));
+      }
+      menus = selectCookTimeDiverseMenus(timeDiversityCandidates, 3);
     }
     if (validationFailures.length) {
       console.warn('Recommendation validation failures:', JSON.stringify(validationFailures));
