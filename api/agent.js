@@ -771,7 +771,7 @@ module.exports = async function handler(req, res) {
     if (validationFailures.length) {
       console.warn('Recommendation validation failures:', JSON.stringify(validationFailures));
     }
-    if (menus.length < 3) throw new Error('3개의 검색 후보를 확보하지 못했습니다.');
+    if (!menus.length) throw new Error('조건을 만족하는 검색 후보를 확보하지 못했습니다.');
     return res.status(200).json({
       menus: menus.slice(0, 3),
       cuisines,
