@@ -1,7 +1,7 @@
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const { calculateMissingIngredients: calculateMissingIngredientsPure, filterByCuisine: filterRecipesByCuisine } = require('./retrieval');
 const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-5.6-terra';
-const CUISINES = ['한식', '중식', '양식', '일식', '분식'];
+const CUISINES = ['한식', '중식', '양식', '일식'];
 const INGREDIENT_ALIASES = {
   '훈제연어': '연어', '생연어': '연어', '연어회': '연어',
   '가래떡': '떡', '떡볶이떡': '떡', '떡국떡': '떡',
@@ -21,14 +21,14 @@ function inferCuisine(recipeName, content = '') {
   if (/(짜장|탕수|마파|중화|새우 볶음밥)/.test(text)) return ['중식'];
   if (/(우동|초밥|사시미|일식|일본식|카레)/.test(text)) return ['일식'];
   if (/(파스타|피자|오믈렛|리소토|샐러드|스테이크|양식)/.test(text)) return ['양식'];
-  if (/(떡볶이|김밥|김치전|비빔국수|분식)/.test(text)) return ['분식'];
+  if (/(떡볶이|김밥|김치전|비빔국수|분식)/.test(text)) return ['한식'];
   return ['한식'];
 }
 
 const env = () => ({
   openai: process.env.OPENAI_API_KEY,
   supabaseUrl: process.env.SUPABASE_URL,
-  supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY
+  supabaseKey: process.env.SUPABASE_ANON_KEY
 });
 
 async function openai(path, body, key) {
@@ -51,8 +51,28 @@ async function embed(text, key) {
   return payload.data[0].embedding;
 }
 
+const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+// Supabase 적재·인덱스 갱신 중 발생하는 일시적인 5xx를 짧게 재시도합니다.
+async function fetchSearchWithRetry(url, options, label) {
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok) return response;
+      const detail = await response.text();
+      lastError = new Error(`${label} failed (${response.status}): ${detail.slice(0, 240)}`);
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < 3) await sleep(400 * (2 ** (attempt - 1)));
+  }
+  throw lastError;
+}
+
 async function searchRecipes(queryEmbedding, config, cuisines = []) {
-  const response = await fetch(`${config.supabaseUrl}/rest/v1/rpc/match_recipe_chunks`, {
+  const url = `${config.supabaseUrl}/rest/v1/rpc/match_recipe_chunks`;
+  const options = {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -66,22 +86,17 @@ async function searchRecipes(queryEmbedding, config, cuisines = []) {
       match_count: 500,
       selected_cuisines: cuisines
     })
-  });
-  if (!response.ok) {
-    // 새 RPC 마이그레이션 전에도 동작하도록 기존 3개 인자 RPC로 한 번 더 시도합니다.
-    const legacyResponse = await fetch(`${config.supabaseUrl}/rest/v1/rpc/match_recipe_chunks`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        apikey: config.supabaseKey,
-        authorization: `Bearer ${config.supabaseKey}`
-      },
+  };
+  try {
+    return await (await fetchSearchWithRetry(url, options, 'Supabase search')).json();
+  } catch (error) {
+    // 새 RPC가 아직 배포되지 않은 환경에서는 기존 인자 형태로 재시도합니다.
+    const legacyOptions = {
+      ...options,
       body: JSON.stringify({ query_embedding: queryEmbedding, match_threshold: -1, match_count: 2000 })
-    });
-    if (!legacyResponse.ok) throw new Error(`Supabase search failed (${legacyResponse.status})`);
-    return legacyResponse.json();
+    };
+    return await (await fetchSearchWithRetry(url, legacyOptions, 'Supabase legacy search')).json();
   }
-  return response.json();
 }
 
 function promptFor({ ingredients, filters, exclude, hits }) {
@@ -177,6 +192,17 @@ function extractRecipeIngredients(content) {
     .filter(Boolean);
 }
 
+// 검색 문서에서 조리 순서 구간만 추출하고 제목·메타데이터는 단계에서 제외합니다.
+function extractRecipeSteps(content) {
+  const text = String(content || '');
+  const labeledMatch = text.match(/조리\s*순서\s*:\s*(.*?)(?=\.\s*(?:태그|조리\s*시간|난이도)\s*:|$)/);
+  const source = labeledMatch ? labeledMatch[1] : text;
+  return source
+    .split(/[.。]/)
+    .map(step => step.trim())
+    .filter(step => step && !/^(?:음식\s*종류|필요\s*재료|조리\s*순서|태그|조리\s*시간|난이도)\s*:/.test(step));
+}
+
 // 사용자가 고른 재료를 기준으로 레시피의 부족 재료를 서버에서 확정합니다.
 function calculateMissingIngredients(ownedIngredients, requiredIngredients) {
   return calculateMissingIngredientsPure(ownedIngredients, requiredIngredients);
@@ -221,7 +247,7 @@ function fallbackMenuFromHit(hit, ownedIngredients) {
     name: hit.recipe_name,
     cuisine: hit.cuisine || inferCuisine(hit.recipe_name, content),
     description: content.split(/[.。]/)[0].trim(),
-    recipe: content.split(/[.。]/).map(step => step.trim()).filter(Boolean),
+    recipe: extractRecipeSteps(content),
     cookTime: cookTime ? `${cookTime[1]}분` : '시간 정보 없음',
     difficulty: difficulty ? difficulty[1] : '보통',
     ingredients: requiredIngredients,
