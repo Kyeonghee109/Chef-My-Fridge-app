@@ -120,7 +120,7 @@ function promptFor({ ingredients, filters, exclude, hits }) {
 음식 종류: ${filters.cuisines?.join(', ') || '전체'}
 제외할 직전 메뉴: ${exclude.join(', ') || '없음'}
 
-아래 검색 문서에 있는 레시피를 근거로 정확히 3개 추천하세요. 선택한 음식 종류가 있으면 해당 종류를 우선하고, 3개가 부족할 때만 다른 음식 종류를 보충하세요. 검색 문서에 없는 조리법을 새로 지어내지 말고, 재료가 부족하면 missingIngredients에 표시하세요. 메뉴명은 사용자가 그대로 검색했을 때 일반적인 레시피를 찾을 수 있는 표준 메뉴명으로 작성하세요. 임의의 감성 표현, 재료 나열식 이름, 브랜드명, 유행어를 메뉴명에 붙이지 말고 "김치찌개", "토마토 파스타", "계란 볶음밥"처럼 널리 쓰이는 대표 명칭만 사용하세요. 제외 메뉴는 반환하지 마세요. description은 카드에 보여 줄 60자 이하의 한 문장 메뉴 소개만 작성하세요. 조리 순서, 시간, 단계, "넣고·볶고·익히고·준비합니다" 같은 과정 설명은 description에 절대 넣지 마세요. 각 메뉴의 steps 배열은 요리 특성에 맞게 5~7개의 현실적인 조리 단계로 작성하세요. 단계 수를 임의로 4개로 고정하거나 줄이지 말고, 필요한 준비·손질·가열·간 맞추기·마무리 과정을 자연스럽게 나누세요. steps의 각 항목에는 한 가지 핵심 동작만 넣고, 여러 동작이나 여러 문장을 한 단계에 합치지 마세요. 조리 순서의 모든 문장은 "~합니다, ~썹니다, ~볶습니다, ~끓입니다"처럼 합니다체 서술형 존댓말로 끝내고, "~해주세요" 같은 요청형 표현은 사용하지 마세요. 재료의 정확한 수량은 처음 사용하는 단계에 한 번만 쓰고, 이후 단계에서는 "재료들을", "전체를", "볶은 재료" 같은 자연스러운 대명사로 이어서 수량을 반복하지 마세요. 재료 손질·준비 단계(썰기, 다지기, 씻기, 계량하기 등)에는 시간이나 불 세기를 절대 넣지 말고 동작만 자연스럽게 서술하세요. 실제로 불을 사용하는 가열 조리 단계(끓이기, 익히기, 조리기, 볶기)에만 구체적인 조리 시간(예: 2~3분), 불 세기(강불/중불/약불), 실제로 그 단계에서 사용하는 재료·조미료와 양을 포함하세요. 모든 가열 조리 단계의 시간 합계는 20분을 넘지 않도록 하며, 볶음·찜 요리는 총 15~20분 내외의 현실적인 시간으로 작성하세요. 사용하지 않는 재료나 조미료는 절대 언급하지 말고, "사용하지 않음", "아직 넣지 않음" 같은 부정 설명도 쓰지 마세요. 음식 종류·필요 재료·태그·조리 시간·난이도는 각각 별도 필드에만 넣고 steps 배열에는 절대 넣지 마세요. 재료 손질, 예열 또는 기름 두르기, 핵심 조리, 간 맞추기, 마무리 순서가 자연스럽게 이어지도록 작성하세요. 반드시 JSON 객체 하나만 반환하세요.
+아래 검색 문서에 있는 레시피를 근거로 정확히 3개 추천하세요. 선택한 음식 종류가 있으면 해당 종류를 우선하고, 3개가 부족할 때만 다른 음식 종류를 보충하세요. 검색 문서에 없는 조리법을 새로 지어내지 말고, 재료가 부족하면 missingIngredients에 표시하세요. 메뉴명은 사용자가 그대로 검색했을 때 일반적인 레시피를 찾을 수 있는 표준 메뉴명으로 작성하세요. 임의의 감성 표현, 재료 나열식 이름, 브랜드명, 유행어를 메뉴명에 붙이지 말고 "김치찌개", "토마토 파스타", "계란 볶음밥"처럼 널리 쓰이는 대표 명칭만 사용하세요. 제외 메뉴는 반환하지 마세요. description은 카드에 보여 줄 60자 이하의 한 문장 메뉴 소개만 작성하세요. 조리 순서, 시간, 단계, "넣고·볶고·익히고·준비합니다" 같은 과정 설명은 description에 절대 넣지 마세요. 각 메뉴의 steps 배열은 요리 특성에 맞게 필요한 만큼 충분한 조리 단계로 작성하세요. 단계 수에 상한을 두거나 임의로 줄이지 말고, 필요한 준비·손질·가열·간 맞추기·마무리 과정을 자연스럽게 나누세요. steps의 각 항목에는 한 가지 핵심 동작만 넣고, 여러 동작이나 여러 문장을 한 단계에 합치지 마세요. 조리 순서의 모든 문장은 "~합니다, ~썹니다, ~볶습니다, ~끓입니다"처럼 합니다체 서술형 존댓말로 끝내고, "~해주세요" 같은 요청형 표현은 사용하지 마세요. 재료의 정확한 수량은 처음 사용하는 단계에 한 번만 쓰고, 이후 단계에서는 "재료들을", "전체를", "볶은 재료" 같은 자연스러운 대명사로 이어서 수량을 반복하지 마세요. 재료 손질·준비 단계(썰기, 다지기, 씻기, 계량하기 등)에는 시간이나 불 세기를 절대 넣지 말고 동작만 자연스럽게 서술하세요. 실제로 불을 사용하는 가열 조리 단계(끓이기, 익히기, 조리기, 볶기)에만 구체적인 조리 시간(예: 2~3분), 불 세기(강불/중불/약불), 실제로 그 단계에서 사용하는 재료·조미료와 양을 포함하세요. 모든 가열 조리 단계의 시간 합계는 20분을 넘지 않도록 하며, 볶음·찜 요리는 총 15~20분 내외의 현실적인 시간으로 작성하세요. 사용하지 않는 재료나 조미료는 절대 언급하지 말고, "사용하지 않음", "아직 넣지 않음" 같은 부정 설명도 쓰지 마세요. 음식 종류·필요 재료·태그·조리 시간·난이도는 각각 별도 필드에만 넣고 steps 배열에는 절대 넣지 마세요. 재료 손질, 예열 또는 기름 두르기, 핵심 조리, 간 맞추기, 마무리 순서가 자연스럽게 이어지도록 작성하세요. 반드시 JSON 객체 하나만 반환하세요.
 형식: {"menus":[{"name":"메뉴명","description":"돼지고기와 감자를 활용한 파스타입니다.","cuisine":["음식 종류"],"tags":["태그"],"steps":["1단계 내용","2단계 내용"],"cookTime":"조리 시간","difficulty":"쉬움|보통|어려움","ingredients":["필요 재료"],"missingIngredients":["추가 재료"]}]}
 
 <검색 문서>
@@ -279,7 +279,7 @@ function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = t
   if (matchedIngredients.length < 1) failures.push('사용자 재료와 실제 교집합 없음');
   if (!sameIngredientList(menu?.missingIngredients, expectedMissing)) failures.push('missingIngredients 계산 불일치');
   const generatedRecipe = cleanRecipeSteps(menu?.steps || menu?.recipe);
-  const sourceRecipe = extractRecipeSteps(hit?.content);
+  const sourceRecipe = hasCompleteRecipeSource(hit?.content) ? extractRecipeSteps(hit?.content) : [];
   return {
     ok: failures.length === 0,
     failures,
@@ -315,6 +315,13 @@ function extractRecipeSteps(content) {
     .split(/\n+/)
     .flatMap(splitRecipeStepText)
     .filter(step => step && !RECIPE_METADATA_LINE.test(step));
+}
+
+function hasCompleteRecipeSource(content) {
+  const source = String(content || '');
+  const recipeStart = source.search(/조리\s*순서\s*:/);
+  if (recipeStart < 0) return false;
+  return /(?:\n|[.。])\s*(?:음식\s*종류|필요\s*재료|태그|조리\s*시간|난이도)\s*:/.test(source.slice(recipeStart));
 }
 
 // 한 항목에 여러 문장이 들어온 구버전/LLM 응답도 화면에서 동작 단위별로 나눕니다.
@@ -424,7 +431,7 @@ module.exports = async function handler(req, res) {
       const answer = await openai('chat/completions', {
         model: CHAT_MODEL,
         response_format: { type: 'json_object' },
-        max_tokens: 3000,
+        max_tokens: 6000,
         messages: [
           { role: 'system', content: '검색 문서에 근거한 JSON만 반환하세요.' },
           { role: 'user', content: promptFor({ ingredients: body.ingredients, filters: { ...filters, cuisines }, exclude, hits: promptHits }) }
