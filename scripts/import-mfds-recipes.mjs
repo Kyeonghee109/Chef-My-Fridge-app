@@ -39,9 +39,11 @@ function ingredientName(segment) {
     .replace(/\s+$/, '');
 }
 
-function parseIngredients(raw) {
+function parseIngredients(raw, title = '') {
   const items = [];
-  for (const line of String(raw ?? '').split(/\r?\n/)) {
+  for (const [lineIndex, line] of String(raw ?? '').split(/\r?\n/).entries()) {
+    // 일부 식약처 원문은 첫 줄에 레시피 제목을 넣습니다. 재료가 아니므로 제외합니다.
+    if (lineIndex === 0 && clean(line).replace(/\s+/g, '') === clean(title).replace(/\s+/g, '')) continue;
     for (const segment of line.split(',')) {
       const value = clean(segment);
       const name = ingredientName(value);
@@ -51,6 +53,13 @@ function parseIngredients(raw) {
     }
   }
   return items;
+}
+
+function estimateCookTime(steps) {
+  const explicitMinutes = steps.flatMap(step => [...step.matchAll(/(\d+)\s*(?:[~\-–]\s*(\d+)\s*)?분/g)])
+    .reduce((total, match) => total + Number(match[2] || match[1]), 0);
+  // 시간 표기가 없는 손질·혼합 단계도 최소 2분씩 반영합니다. 원문 시간과 구분되는 예상값입니다.
+  return Math.min(180, Math.max(5, explicitMinutes + steps.filter(step => !/\d+\s*(?:[~\-–]\s*\d+\s*)?분/.test(step)).length * 2));
 }
 
 function recipeFromRow(row) {
@@ -67,11 +76,13 @@ function recipeFromRow(row) {
     id: `mfds-${row.RCP_SEQ}`,
     title,
     description: `${method || '조리'} 방식의 ${category || '요리'}입니다. 식품의약품안전처 조리식품 레시피 DB의 원문 재료와 조리 순서를 제공합니다.`,
-    ingredients: parseIngredients(row.RCP_PARTS_DTLS),
+    ingredients: parseIngredients(row.RCP_PARTS_DTLS, title),
     ingredients_raw: ingredientsRaw,
     steps,
     images: { main: clean(row.ATT_FILE_NO_MAIN), steps: stepImages },
     tags: [method, category, '식품의약품안전처'].filter(Boolean),
+    cook_time: estimateCookTime(steps),
+    cook_time_source: 'step-estimate',
     cuisine,
     cuisine_classification: cuisine.length ? 'keyword-rule' : 'unclassified',
     nutrition_per_serving: {

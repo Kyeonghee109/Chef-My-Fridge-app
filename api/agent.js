@@ -16,6 +16,8 @@ const INGREDIENT_ALIASES = {
   '칵테일새우': '새우', '새우살': '새우'
 };
 const CORE_INGREDIENTS = new Set(['연어', '어묵', '떡', '새우', '닭가슴살', '닭고기', '브로콜리', '당근', '파스타면', '버섯', '우유']);
+// 입력하지 않아도 보유한 것으로 간주하는 최소 조리 재료입니다. 두부·대파·채소 등은 포함하지 않습니다.
+const PANTRY_INGREDIENTS = new Set(['물', '식용유', '올리브유', '참기름', '소금', '설탕', '후추', '후춧가루', '간장', '식초', '고춧가루', '참깨', '깨', '다진마늘', '마늘']);
 const RECIPE_CUISINES = {
   '계란 볶음밥': ['한식'], '김치찌개': ['한식'], '두부 구이': ['한식'],
   '닭가슴살 채소볶음': ['한식'], '토마토 파스타': ['양식'], '감자채 볶음': ['한식']
@@ -251,6 +253,30 @@ function canonicalIngredient(value) {
   return INGREDIENT_ALIASES[normalized] || normalized;
 }
 
+function isPantryIngredient(value) {
+  return PANTRY_INGREDIENTS.has(canonicalIngredient(value));
+}
+
+function missingCoreIngredients(ownedIngredients, requiredIngredients) {
+  const owned = new Set((ownedIngredients || []).map(canonicalIngredient));
+  return (requiredIngredients || []).filter(item => {
+    const key = canonicalIngredient(item);
+    return key && !owned.has(key) && !isPantryIngredient(item);
+  });
+}
+
+function timeLimitMinutes(value) {
+  const match = String(value || '').match(/(\d+)\s*분|1\s*시간/);
+  if (!match) return null;
+  return /시간/.test(value) ? 60 : Number(match[1]);
+}
+
+function isWithinTimeLimit(hit, limit) {
+  if (!limit) return true;
+  const minutes = Number(extractLabeledValue(hit.content, '조리 시간').match(/\d+/)?.[0]);
+  return Number.isFinite(minutes) && minutes <= limit;
+}
+
 // 구버전 DB 문서에 수량이 없을 때도 화면에 일관된 대략적인 분량을 표시합니다.
 function ensureIngredientQuantity(value) {
   const text = String(value || '').trim();
@@ -408,7 +434,7 @@ function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = t
       name: normalizeRecipeName(hit?.recipe_name),
       description: cardDescription(menu?.description, hit),
       cuisine: hit?.cuisine || [],
-      cookTime: resolveCookTime(menu?.cookTime, hit?.content, menu?.recipe),
+      cookTime: resolveCookTime('', hit?.content, menu?.recipe),
       ingredients: requiredIngredients,
       missingIngredients: expectedMissing,
       // 생성 단계가 충분하면 요청한 간결한 조리 형식을 사용하고,
@@ -633,7 +659,11 @@ module.exports = async function handler(req, res) {
         : inferCuisine(hit.recipe_name, hit.content)
     }));
     // 벡터 유사도 후보를 재료 매칭 점수와 핵심 재료 우선순위로 재정렬합니다.
-    const rankedHits = rankRecipeHits(body.ingredients, enrichedHits, 40);
+    const timeLimit = timeLimitMinutes(filters.time);
+    const rankedHits = rankRecipeHits(body.ingredients, enrichedHits, 40)
+      .filter(hit => missingCoreIngredients(body.ingredients, hit.requiredIngredients).length === 0)
+      .filter(hit => isWithinTimeLimit(hit, timeLimit));
+    if (!rankedHits.length) return res.status(404).json({ error: '보유한 핵심 재료와 시간 조건을 모두 만족하는 레시피를 찾지 못했습니다.' });
 
     // 검색 후보는 충분히 확보하되, LLM 컨텍스트는 제한해 요청 크기 초과를 방지합니다.
     const promptHits = rankedHits.slice(0, PROMPT_HIT_COUNT);
