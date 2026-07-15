@@ -203,6 +203,25 @@ function extractRecipeSteps(content) {
     .filter(step => step && !/^(?:음식\s*종류|필요\s*재료|조리\s*순서|태그|조리\s*시간|난이도)\s*:/.test(step));
 }
 
+function resolveCookTime(value, content, recipe = []) {
+  const format = candidate => {
+    const match = String(candidate || '').match(/(\d+)\s*(?:[~\-–]\s*(\d+)\s*)?분/);
+    if (!match) return '';
+    return match[2] ? `${match[1]}~${match[2]}분` : `${match[1]}분`;
+  };
+
+  const provided = format(value);
+  if (provided) return provided;
+
+  const labeled = String(content || '').match(/조리\s*시간(?:은)?\s*(?:약\s*)?(\d+)\s*(?:[~\-–]\s*(\d+)\s*)?분/);
+  if (labeled) return labeled[2] ? `${labeled[1]}~${labeled[2]}분` : `${labeled[1]}분`;
+
+  const estimatedMinutes = (Array.isArray(recipe) ? recipe : [])
+    .flatMap(step => [...String(step || '').matchAll(/(\d+)\s*(?:[~\-–]\s*(\d+)\s*)?분/g)])
+    .reduce((total, match) => total + Number(match[2] || match[1]), 0);
+  return `${Math.min(Math.max(estimatedMinutes || 20, 5), 180)}분`;
+}
+
 // 사용자가 고른 재료를 기준으로 레시피의 부족 재료를 서버에서 확정합니다.
 function calculateMissingIngredients(ownedIngredients, requiredIngredients) {
   return calculateMissingIngredientsPure(ownedIngredients, requiredIngredients);
@@ -231,6 +250,7 @@ function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = t
       ...menu,
       name: hit?.recipe_name,
       cuisine: hit?.cuisine || [],
+      cookTime: resolveCookTime(menu?.cookTime, hit?.content, menu?.recipe),
       ingredients: requiredIngredients,
       missingIngredients: expectedMissing
     }
@@ -241,14 +261,14 @@ function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = t
 function fallbackMenuFromHit(hit, ownedIngredients) {
   const content = String(hit.content || '');
   const requiredIngredients = hit.requiredIngredients || [];
-  const cookTime = content.match(/(?:조리 시간은|조리 시간은 약|조리 시간\s*:)\s*(\d+)분/);
   const difficulty = content.match(/(?:난이도는|난이도\s*:)\s*(쉬움|보통|어려움)/);
+  const recipe = extractRecipeSteps(content);
   return {
     name: hit.recipe_name,
     cuisine: hit.cuisine || inferCuisine(hit.recipe_name, content),
     description: content.split(/[.。]/)[0].trim(),
-    recipe: extractRecipeSteps(content),
-    cookTime: cookTime ? `${cookTime[1]}분` : '시간 정보 없음',
+    recipe,
+    cookTime: resolveCookTime('', content, recipe),
     difficulty: difficulty ? difficulty[1] : '보통',
     ingredients: requiredIngredients,
     missingIngredients: calculateMissingIngredients(ownedIngredients, requiredIngredients)
