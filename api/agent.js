@@ -117,7 +117,12 @@ function filterByCuisine(hits, cuisines) {
 
 // 재료명 비교를 위해 공백과 문장부호를 정리합니다.
 function normalizeIngredient(value) {
-  return String(value || '').toLocaleLowerCase('ko-KR').replace(/[\s.,。]+/g, '');
+  return String(value || '')
+    .toLocaleLowerCase('ko-KR')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\d+(?:\.\d+)?\s*(?:kg|g|mg|ml|l|개|알|장|봉|팩|캔|컵|큰술|작은술|스푼|쪽|대|줄|마리|근|인분)/gi, '')
+    .replace(/약간|적당량|한줌|한 줌/g, '')
+    .replace(/[\s.,。/·]+/g, '');
 }
 
 // 검색된 레시피 원문에서 쉼표로 나열된 필요 재료를 추출합니다.
