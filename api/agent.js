@@ -416,10 +416,12 @@ function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = t
   const requiredIngredients = hit?.requiredIngredients || [];
   const matchedIngredients = requiredIngredients.filter(item => ownedIngredients.some(owned => canonicalIngredient(owned) === canonicalIngredient(item)));
   const expectedMissing = calculateMissingIngredients(ownedIngredients, requiredIngredients, hit?.metadata?.core_ingredient_keys || []);
+  const missingCore = missingCoreIngredients(ownedIngredients, requiredIngredients, hit?.metadata?.core_ingredient_keys || []);
   if (strictCuisine && cuisines.length && !hit?.cuisine?.some(cuisine => cuisines.includes(cuisine))) {
     failures.push(`선택 cuisine 불일치: ${hit?.cuisine?.join(', ') || '없음'}`);
   }
   if (matchedIngredients.length < 1) failures.push('사용자 재료와 실제 교집합 없음');
+  if (missingCore.length > 2) failures.push(`핵심 재료 ${missingCore.length}개 부족`);
   if (!sameIngredientList(menu?.missingIngredients, expectedMissing)) failures.push('missingIngredients 계산 불일치');
   const generatedRecipe = addIngredientQuantities(cleanRecipeSteps(menu?.steps || menu?.recipe), requiredIngredients);
   const sourceRecipe = hasCompleteRecipeSource(hit?.content)
