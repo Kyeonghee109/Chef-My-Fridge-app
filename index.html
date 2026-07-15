@@ -86,10 +86,10 @@
     .error { margin:16px 0 0; color:var(--danger); font-weight:650; }
     .screen[hidden] { display:none; }
     #resultsScreen:not([hidden]) { min-height:100vh; display:flex; flex-direction:column; justify-content:center; }
-    .results-head { display:grid; grid-template-columns:minmax(0,1fr) minmax(360px,440px); align-items:center; gap:32px; margin-bottom:24px; }
+    .results-head { display:grid; grid-template-columns:minmax(0,1fr) minmax(480px,560px); align-items:center; gap:32px; margin-bottom:24px; }
     .results-copy .button { margin-top:18px; }
-    .results-illustration { justify-self:end; width:100%; height:230px; border-radius:24px; object-fit:cover; object-position:66% center; opacity:.52; mix-blend-mode:multiply; pointer-events:none; user-select:none; }
-    @media (max-width:980px) and (min-width:769px) { .results-head { grid-template-columns:minmax(0,1fr) 300px; gap:20px; } .results-illustration { height:190px; } }
+    .results-illustration { position:relative; z-index:11; justify-self:end; width:100%; height:360px; border-radius:24px; object-fit:cover; object-position:66% center; opacity:1; filter:none; mix-blend-mode:normal; pointer-events:none; user-select:none; }
+    @media (max-width:980px) and (min-width:769px) { .results-head { grid-template-columns:minmax(0,1fr) 360px; gap:20px; } .results-illustration { height:240px; } }
     .card-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
     .menu-card { position:relative; display:flex; flex-direction:column; min-height:270px; padding:22px; border:1px solid var(--line); border-radius:16px; background:var(--paper); box-shadow:0 6px 18px #292a2707; }
     .card-topline { display:flex; align-items:center; justify-content:space-between; min-height:32px; margin-bottom:12px; }
