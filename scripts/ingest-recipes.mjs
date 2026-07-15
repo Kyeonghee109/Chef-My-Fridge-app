@@ -7,10 +7,17 @@ if (!OPENAI_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 
 // vector(1536) payload와 HNSW 인덱스 갱신으로 statement timeout이 날 수 있어 기본값을 작게 잡습니다.
 const BATCH_SIZE = Number(process.env.INGEST_BATCH_SIZE || 10);
+const GROUP_SIZE = Number(process.env.INGEST_GROUP_SIZE || 5000);
 const MAX_RETRIES = 3;
 const PAGE_SIZE = 1000;
 const recipeDataPath = process.env.RECIPE_DATA_PATH || new URL('../rag-agent/data/recipes.json', import.meta.url);
 const rawRecipes = JSON.parse(await fs.readFile(recipeDataPath, 'utf8'));
+const formatIngredient = ingredient => {
+  if (ingredient && typeof ingredient === 'object') {
+    return [ingredient.name, ingredient.amount, ingredient.unit].filter(value => value !== undefined && value !== '').join(' ');
+  }
+  return String(ingredient ?? '');
+};
 const recipes = rawRecipes.map(recipe => ({
   id: String(recipe.id || recipe.name || recipe.title),
   name: recipe.name || recipe.title,
@@ -18,7 +25,7 @@ const recipes = rawRecipes.map(recipe => ({
   text: recipe.text || [
     recipe.title,
     `음식 종류: ${(recipe.cuisine || []).join(', ')}`,
-    `필요 재료: ${(recipe.ingredients || []).join(', ')}`,
+    `필요 재료: ${(recipe.ingredients || []).map(formatIngredient).join(', ')}`,
     `조리 순서: ${(recipe.steps || []).join(' ')}`,
     `태그: ${(recipe.tags || []).join(', ')}`,
     `조리 시간: ${recipe.cook_time || ''}분`,
@@ -138,21 +145,49 @@ const pendingChunks = chunks.filter(chunk => (
 
 console.log(`레시피 ${recipes.length}개, 전체 청크 ${chunks.length}개`);
 console.log(`Supabase 기존 row ${existingRows.length}개, 이미 확인된 청크 ${chunks.length - pendingChunks.length}개, 신규/변경 삽입 예정 ${pendingChunks.length}개`);
-console.log(`배치 크기 ${BATCH_SIZE}개, 최대 재시도 ${MAX_RETRIES}회`);
+console.log(`그룹 크기 ${GROUP_SIZE}개, 배치 크기 ${BATCH_SIZE}개, 최대 재시도 ${MAX_RETRIES}회`);
 
 const failures = [];
 let completed = chunks.length - pendingChunks.length;
-for (let start = 0; start < pendingChunks.length; start += BATCH_SIZE) {
-  const batch = pendingChunks.slice(start, start + BATCH_SIZE);
-  try {
-    await upsertWithSplit(batch);
-  } catch (error) {
-    failures.push(...batch.map(chunk => ({ id: chunk.recipe_id, chunk_key: chunk.chunk_key, title: chunk.recipe_name, error: error.message })));
-    console.error(`배치 실패 후 다음 배치로 진행: ${batch[0].chunk_key} ~ ${batch.at(-1).chunk_key}`);
-    console.error(`실패 원문: ${error.message}`);
+for (let groupStart = 0; groupStart < pendingChunks.length; groupStart += GROUP_SIZE) {
+  const group = pendingChunks.slice(groupStart, groupStart + GROUP_SIZE);
+  const groupNumber = Math.floor(groupStart / GROUP_SIZE) + 1;
+  const groupCount = Math.ceil(pendingChunks.length / GROUP_SIZE);
+  const failedBatches = [];
+  console.log(`그룹 ${groupNumber}/${groupCount} 시작: ${group.length}개 청크`);
+
+  for (let batchStart = 0; batchStart < group.length; batchStart += BATCH_SIZE) {
+    const batch = group.slice(batchStart, batchStart + BATCH_SIZE);
+    try {
+      await upsertWithSplit(batch);
+    } catch (error) {
+      failedBatches.push({ batch, error });
+      console.error(`그룹 ${groupNumber} 배치 실패: ${batch[0].chunk_key} ~ ${batch.at(-1).chunk_key}`);
+      console.error(`실패 원문: ${error.message}`);
+    }
+    completed += batch.length;
+    console.log(`인덱싱 진행: ${completed}/${chunks.length}`);
   }
-  completed += batch.length;
-  console.log(`인덱싱 진행: ${completed}/${chunks.length}`);
+
+  // 그룹 안에서 실패한 배치는 그룹을 끝내기 전에 한 번 더 복구 시도합니다.
+  if (failedBatches.length) {
+    console.warn(`그룹 ${groupNumber} 실패 배치 ${failedBatches.length}개 복구 재시도`);
+    for (const failed of failedBatches) {
+      try {
+        await upsertWithSplit(failed.batch);
+        console.log(`복구 성공: ${failed.batch[0].chunk_key} ~ ${failed.batch.at(-1).chunk_key}`);
+      } catch (error) {
+        failures.push(...failed.batch.map(chunk => ({
+          id: chunk.recipe_id,
+          chunk_key: chunk.chunk_key,
+          title: chunk.recipe_name,
+          error: error.message
+        })));
+        console.error(`복구 실패: ${failed.batch[0].chunk_key} ~ ${failed.batch.at(-1).chunk_key}`);
+      }
+    }
+  }
+  console.log(`그룹 ${groupNumber}/${groupCount} 완료: 실패 ${failures.length}개`);
 }
 
 const finalRows = await fetchExistingRows();
