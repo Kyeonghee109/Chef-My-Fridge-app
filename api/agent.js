@@ -1,4 +1,5 @@
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-5.6-terra';
 const CUISINES = ['한식', '중식', '양식', '일식', '분식'];
 const RECIPE_CUISINES = {
   '계란 볶음밥': ['한식'], '김치찌개': ['한식'], '두부 구이': ['한식'],
@@ -211,7 +212,7 @@ module.exports = async function handler(req, res) {
     let generatedMenus = [];
     try {
       const answer = await openai('chat/completions', {
-        model: 'gpt-4o-mini',
+        model: CHAT_MODEL,
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: '검색 문서에 근거한 JSON만 반환하세요.' },
