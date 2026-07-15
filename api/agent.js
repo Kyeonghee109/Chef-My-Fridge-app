@@ -1,6 +1,9 @@
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const { filterByCuisine: filterRecipesByCuisine } = require('./retrieval');
-const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-5.6-terra';
+const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini';
+const SEARCH_MATCH_COUNT = 500;
+const PROMPT_HIT_COUNT = 12;
+const PROMPT_CONTENT_LIMIT = 900;
 const CUISINES = ['한식', '중식', '양식', '일식'];
 const INGREDIENT_ALIASES = {
   '훈제연어': '연어', '생연어': '연어', '연어회': '연어',
@@ -28,18 +31,26 @@ function inferCuisine(recipeName, content = '') {
 const env = () => ({
   openai: process.env.OPENAI_API_KEY,
   supabaseUrl: process.env.SUPABASE_URL,
-  supabaseKey: process.env.SUPABASE_ANON_KEY
+  supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
 });
 
-async function openai(path, body, key) {
-  const response = await fetch(`https://api.openai.com/v1/${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-    body: JSON.stringify(body)
-  });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(`OpenAI request failed (${response.status})`);
-  return payload;
+async function openai(path, body, key, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let response;
+  try {
+    response = await fetch(`https://api.openai.com/v1/${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(`OpenAI request failed (${response.status})`);
+    return payload;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function embed(text, key) {
@@ -83,7 +94,7 @@ async function searchRecipes(queryEmbedding, config, cuisines = []) {
       query_embedding: queryEmbedding,
       // 선택 카테고리 안에서는 유사도보다 카테고리 후보 확보를 우선합니다.
       match_threshold: -1,
-      match_count: 500,
+      match_count: SEARCH_MATCH_COUNT,
       selected_cuisines: cuisines
     })
   };
@@ -93,14 +104,14 @@ async function searchRecipes(queryEmbedding, config, cuisines = []) {
     // 새 RPC가 아직 배포되지 않은 환경에서는 기존 인자 형태로 재시도합니다.
     const legacyOptions = {
       ...options,
-      body: JSON.stringify({ query_embedding: queryEmbedding, match_threshold: -1, match_count: 2000 })
+      body: JSON.stringify({ query_embedding: queryEmbedding, match_threshold: -1, match_count: SEARCH_MATCH_COUNT })
     };
     return await (await fetchSearchWithRetry(url, legacyOptions, 'Supabase legacy search')).json();
   }
 }
 
 function promptFor({ ingredients, filters, exclude, hits }) {
-  const context = hits.map(hit => `- [${hit.recipe_name}] 필요 재료: ${(hit.requiredIngredients || []).join(', ')}\n  ${hit.content}`).join('\n');
+  const context = hits.map(hit => `- [${hit.recipe_name}] 필요 재료: ${(hit.requiredIngredients || []).join(', ')}\n  ${String(hit.content || '').slice(0, PROMPT_CONTENT_LIMIT)}`).join('\n');
   return `냉장고 재료 기반 레시피 추천을 수행하세요.
 보유 재료: ${ingredients.join(', ')}
 조리 시간: ${filters.time || '상관없음'}
@@ -333,6 +344,8 @@ function normalizeRecipeName(name) {
   return String(name || '')
     .trim()
     .replace(/\s+/g, ' ')
+    // 모델이나 원문에 붙은 목록 번호는 메뉴명으로 노출하지 않습니다.
+    .replace(/^(?:메뉴\s*)?(?:\d{1,3}|[①②③④⑤⑥⑦⑧⑨⑩])\s*[.)、:：-]?\s*/u, '')
     .replace(/(^|\s)([^\s]+)(?:\s+\2)(?=\s|$)/g, '$1$2');
 }
 
@@ -402,20 +415,21 @@ module.exports = async function handler(req, res) {
         : inferCuisine(hit.recipe_name, hit.content)
     }));
     // 벡터 유사도 후보를 재료 매칭 점수와 핵심 재료 우선순위로 재정렬합니다.
-    const rankedHits = rankRecipeHits(body.ingredients, enrichedHits);
+    const rankedHits = rankRecipeHits(body.ingredients, enrichedHits, 20);
 
     // 검색 후보는 충분히 확보하되, LLM 컨텍스트는 제한해 요청 크기 초과를 방지합니다.
-    const promptHits = rankedHits.slice(0, 40);
+    const promptHits = rankedHits.slice(0, PROMPT_HIT_COUNT);
     let generatedMenus = [];
     try {
       const answer = await openai('chat/completions', {
         model: CHAT_MODEL,
         response_format: { type: 'json_object' },
+        max_tokens: 1400,
         messages: [
           { role: 'system', content: '검색 문서에 근거한 JSON만 반환하세요.' },
           { role: 'user', content: promptFor({ ingredients: body.ingredients, filters: { ...filters, cuisines }, exclude, hits: promptHits }) }
         ]
-      }, config.openai);
+      }, config.openai, 12000);
       const result = JSON.parse(answer.choices?.[0]?.message?.content || '{}');
       generatedMenus = Array.isArray(result.menus) ? result.menus : [];
     } catch (error) {
