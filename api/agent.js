@@ -153,6 +153,18 @@ function canonicalIngredient(value) {
   return INGREDIENT_ALIASES[normalized] || normalized;
 }
 
+// 구버전 DB 문서에 수량이 없을 때도 화면에 일관된 대략적인 분량을 표시합니다.
+function ensureIngredientQuantity(value) {
+  const text = String(value || '').trim();
+  if (!text || /\d+(?:[./]\d+)?\s*(?:kg|g|mg|ml|l|개|알|장|봉|팩|캔|컵|큰술|작은술|스푼|쪽|대|줄|마리|근|인분)/i.test(text)) return text;
+  if (/소금|후추|고춧가루|참깨|설탕/.test(text)) return `${text} 1작은술`;
+  if (/간장|식초|참기름|올리브유|식용유|된장|고추장|굴소스|버터/.test(text)) return `${text} 1큰술`;
+  if (/계란|달걀/.test(text)) return `${text} 2개`;
+  if (/면|파스타|우동|국수|밥|쌀/.test(text)) return `${text} 1인분`;
+  if (/닭|소고기|돼지고기|연어|새우|어묵|두부/.test(text)) return `${text} 150g`;
+  return `${text} 100g`;
+}
+
 function rankRecipeHits(userIngredients, hits, limit = 40) {
   const userKeys = new Set(userIngredients.map(canonicalIngredient).filter(Boolean));
   const scored = hits.map(hit => {
@@ -177,7 +189,7 @@ function extractRecipeIngredients(content) {
   if (labeledMatch) {
     return labeledMatch[1]
       .split(/,|\s+및\s+|\s+와\s+|\s+과\s+/)
-      .map(item => item.trim().replace(/[.。]$/g, ''))
+      .map(item => ensureIngredientQuantity(item.trim().replace(/[.。]$/g, '')))
       .filter(Boolean);
   }
   const patterns = [
@@ -188,7 +200,7 @@ function extractRecipeIngredients(content) {
   if (!match) return [];
   return match[1]
     .split(/,|\s+및\s+|\s+와\s+|\s+과\s+/)
-    .map(item => item.trim().replace(/[.。]$/g, ''))
+    .map(item => ensureIngredientQuantity(item.trim().replace(/[.。]$/g, '')))
     .filter(Boolean);
 }
 
