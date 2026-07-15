@@ -87,12 +87,12 @@
     .error { margin:16px 0 0; color:var(--danger); font-weight:650; }
     .screen[hidden], .how-to[hidden] { display:none; }
     #resultsScreen:not([hidden]) { min-height:100vh; display:flex; flex-direction:column; justify-content:center; }
-    .results-head { position:relative; min-height:380px; margin-bottom:24px; }
-    .results-copy { position:relative; z-index:2; width:50%; }
+    .results-head { position:relative; min-height:360px; margin-bottom:20px; }
+    .results-copy { position:relative; z-index:2; width:48%; }
     .results-copy .button { margin-top:18px; }
-    .results-illustration { position:absolute; top:-1.7cm; right:0; z-index:0; display:block; width:645.1px; height:auto; aspect-ratio:996 / 681; pointer-events:none; user-select:none; }
-    @media (max-width:1024px) and (min-width:769px) { .results-illustration { top:-2.1cm; right:-0.7cm; width:483.8px; } }
-    .card-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+    .results-illustration { position:absolute; top:0; right:16px; z-index:0; display:block; width:560px; height:auto; aspect-ratio:996 / 681; pointer-events:none; user-select:none; }
+    @media (max-width:1024px) and (min-width:769px) { .results-illustration { top:0; right:0; width:480px; } }
+    .card-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
     .menu-card { position:relative; display:flex; flex-direction:column; min-height:270px; padding:22px; border:1px solid var(--line); border-radius:16px; background:var(--paper); box-shadow:0 6px 18px #292a2707; }
     .card-topline { display:flex; align-items:center; justify-content:space-between; min-height:32px; margin-bottom:12px; }
     .menu-category { flex:0 0 auto; margin:0; padding:7px 11px; border:1px solid #46645626; border-radius:9999px; color:var(--green); background:var(--mint); font-size:.78rem; font-weight:600; letter-spacing:.02em; }
@@ -157,6 +157,9 @@
     .favorite-list { display:flex; gap:16px; overflow-x:auto; padding:4px 2px 14px; scroll-snap-type:x mandatory; scroll-behavior:smooth; -webkit-overflow-scrolling:touch; }
     .favorite-list .menu-card { flex:0 0 280px; width:280px; scroll-snap-align:start; }
     .favorite-empty { flex:1; margin:0; padding:28px 0; color:var(--muted); text-align:center; }
+    .app:has(#resultsScreen:not([hidden])) { width:min(1120px,calc(100% - 32px)); padding:0 28px 28px; border-radius:28px; background:var(--paper) url("assets/hero-ingredient-pattern.png") center/cover no-repeat; box-shadow:0 10px 30px #292a2714; }
+    .app:has(#resultsScreen:not([hidden])) header { width:100%; margin:0 0 20px; padding:22px 0; background:transparent; }
+    .app:has(#resultsScreen:not([hidden])) #resultsScreen:not([hidden]) { width:100%; min-height:0; padding:0; justify-content:flex-start; background:transparent; }
     .story-selection { width:100vw; min-height:100vh; margin-left:calc(50% - 50vw); padding:48px 0; background:var(--cream) url("assets/hero-ingredient-pattern.png") center/cover no-repeat; }
     .story-selection .panel { width:min(1120px,calc(100% - 32px)); margin:0 auto; padding:40px; border-radius:24px; background:var(--paper); box-shadow:0 2px 8px #292a2714; }
     .ingredient-guide { display:flex; align-items:center; gap:14px; margin-bottom:24px; padding:16px 18px; border-radius:16px; color:var(--green); background:var(--mint); box-shadow:0 1px 4px #292a270f; }
@@ -214,7 +217,7 @@
     </section>
 
     <section class="screen" id="resultsScreen" hidden>
-      <div class="results-head"><div class="results-copy"><p class="eyebrow">02 / Recommendations</p><h2>이런 <span class="heading-highlight">메뉴는 어때요?</span></h2><p class="muted" id="resultSummary"></p><button class="button secondary" id="anotherButton" type="button">다른 메뉴 추천</button></div><img class="results-illustration" src="assets/header-cooking-illustration.png" alt="" aria-hidden="true"></div>
+      <div class="results-head"><div class="results-copy"><p class="eyebrow">02 / Recommendations</p><h2>이런 <span class="heading-highlight">메뉴는 어때요?</span></h2><p class="muted" id="resultSummary"></p><button class="button secondary" id="anotherButton" type="button">다른 메뉴 추천 →</button></div><img class="results-illustration" src="assets/header-cooking-illustration.png" alt="" aria-hidden="true"></div>
       <div class="card-grid" id="menuGrid"></div><p class="error" id="resultError" role="alert"></p>
       <div class="actions"><button class="button ghost" id="backToIngredients">← 재료 다시 고르기</button></div>
     </section>
