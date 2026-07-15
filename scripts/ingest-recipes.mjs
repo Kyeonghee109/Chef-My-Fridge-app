@@ -34,8 +34,6 @@ const chunks = recipes.flatMap(recipe => {
   for (let start = 0; start < recipe.text.length; start += size - overlap) {
     output.push({
       chunk_key: `${recipe.id}::${chunkIndex}`,
-      recipe_id: recipe.id,
-      chunk_index: chunkIndex,
       recipe_name: recipe.name,
       content: recipe.text.slice(start, start + size),
       metadata: {
