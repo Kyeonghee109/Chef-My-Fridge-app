@@ -194,7 +194,7 @@
     }
     const text = (value) => document.createTextNode(String(value ?? ''));
     const el = (tag, className, content) => { const node=document.createElement(tag); if(className) node.className=className; if(content !== undefined) node.append(text(content)); return node; };
-    const normalized = (value) => String(value??'').trim().replace(/\([^)]*\)/g,'').replace(/\d+(?:\.\d+)?\s*(?:kg|g|mg|ml|l|개|알|장|봉|팩|캔|컵|큰술|작은술|스푼|쪽|대|줄|마리|근|인분)/gi,'').replace(/약간|적당량|한줌|한 줌/g,'').replace(/\s+/g,' ').toLocaleLowerCase('ko-KR');
+    const normalized = (value) => String(value??'').trim().replace(/\([^)]*\)/g,'').replace(/(?:\d+(?:[./]\d+)?|[½¼¾])\s*(?:kg|g|mg|ml|l|개|알|장|봉|팩|캔|컵|큰술|작은술|스푼|쪽|대|줄|마리|근|인분)/gi,'').replace(/약간|적당량|한줌|한 줌/g,'').replace(/\s+/g,' ').toLocaleLowerCase('ko-KR');
 
     function showScreen(screen) { state.screen=screen; if(screen!=='ingredients') heroDismissed=true; hero.hidden=heroDismissed; Object.entries(screens).forEach(([name,node]) => { node.hidden=name!==screen; }); window.scrollTo({top:0,behavior:'smooth'}); }
     const conveyorFoods=['🥬','🥕','🍅','🥚','🧅','🍄','🍤','🥩','🥦','🌽','🧀','🍝','🫑','🥔','🍗','🥒','🌶️','🍚','🧄','🍋','🥓','🍆','🍠'];

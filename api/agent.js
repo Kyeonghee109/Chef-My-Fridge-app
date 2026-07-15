@@ -120,7 +120,7 @@ function normalizeIngredient(value) {
   return String(value || '')
     .toLocaleLowerCase('ko-KR')
     .replace(/\([^)]*\)/g, '')
-    .replace(/\d+(?:\.\d+)?\s*(?:kg|g|mg|ml|l|개|알|장|봉|팩|캔|컵|큰술|작은술|스푼|쪽|대|줄|마리|근|인분)/gi, '')
+    .replace(/(?:\d+(?:[./]\d+)?|[½¼¾])\s*(?:kg|g|mg|ml|l|개|알|장|봉|팩|캔|컵|큰술|작은술|스푼|쪽|대|줄|마리|근|인분)/gi, '')
     .replace(/약간|적당량|한줌|한 줌/g, '')
     .replace(/[\s.,。/·]+/g, '');
 }
