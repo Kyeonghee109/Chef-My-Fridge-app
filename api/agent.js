@@ -258,6 +258,8 @@ function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = t
   }
   if (matchedIngredients.length < 1) failures.push('사용자 재료와 실제 교집합 없음');
   if (!sameIngredientList(menu?.missingIngredients, expectedMissing)) failures.push('missingIngredients 계산 불일치');
+  const generatedRecipe = cleanRecipeSteps(menu?.recipe);
+  const sourceRecipe = extractRecipeSteps(hit?.content);
   return {
     ok: failures.length === 0,
     failures,
@@ -269,7 +271,8 @@ function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = t
       cookTime: resolveCookTime(menu?.cookTime, hit?.content, menu?.recipe),
       ingredients: requiredIngredients,
       missingIngredients: expectedMissing,
-      recipe: cleanRecipeSteps(menu?.recipe)
+      // LLM이 단계를 축약하면 검색 원문의 상세 조리 순서를 우선합니다.
+      recipe: sourceRecipe.length > generatedRecipe.length ? sourceRecipe : generatedRecipe
     }
   };
 }
