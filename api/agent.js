@@ -721,31 +721,6 @@ module.exports = async function handler(req, res) {
         validationFailures.push({ menu: hit.recipe_name, reasons: validation.failures });
       }
     }
-    // 선택 cuisine 후보만으로 부족할 때만 검색 범위를 완화해 마지막 보충을 시도합니다.
-    if (menus.length < 3 && cuisines.length) {
-      try {
-        const relaxedHits = await searchRecipes(queryEmbedding, config, []);
-        const relaxedUniqueHits = await hydrateRecipeChunks(mergeRecipeChunks(relaxedHits), config);
-        const relaxedEnriched = relaxedUniqueHits.map(hit => ({
-          ...hit,
-          requiredIngredients: extractRecipeIngredients(hit.content),
-          cuisine: Array.isArray(hit.metadata?.cuisine) && hit.metadata.cuisine.length ? hit.metadata.cuisine : inferCuisine(hit.recipe_name, hit.content)
-        }));
-        for (const hit of rankRecipeHits(body.ingredients, relaxedEnriched)) {
-          if (menus.length >= 3) break;
-          if (seenNames.has(normalizedMenuName(hit.recipe_name)) || excludedNames.has(hit.recipe_name)) continue;
-          const fallback = fallbackMenuFromHit(hit, body.ingredients);
-          const validation = validateMenu(fallback, { hit, ownedIngredients: body.ingredients, cuisines, strictCuisine: false });
-          if (validation.ok) {
-            console.warn(`Cuisine fallback used for ${hit.recipe_name}: ${hit.cuisine.join(', ')}`);
-            menus.push(validation.value);
-            seenNames.add(normalizedMenuName(hit.recipe_name));
-          }
-        }
-      } catch (error) {
-        console.error('Relaxed candidate search failed:', error.message);
-      }
-    }
     // 시간 필터를 지정하지 않은 경우에만 후보군을 넓혀 조리시간 다양성을 보정합니다.
     if (!filters.time && menus.length >= 1) {
       const timeDiversityCandidates = [...menus];
