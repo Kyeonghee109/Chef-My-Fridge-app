@@ -88,11 +88,13 @@
     .screen[hidden], .how-to[hidden] { display:none; }
     #resultsScreen:not([hidden]) { width:100vw; min-height:100vh; margin-left:calc(50% - 50vw); padding:48px max(16px,calc((100vw - 1120px) / 2)); display:flex; flex-direction:column; justify-content:flex-start; background:var(--cream) url("assets/hero-ingredient-pattern.png") center/cover no-repeat; }
     .results-head { position:relative; min-height:380px; margin-bottom:24px; }
-    .results-head::before { content:""; position:absolute; top:50%; right:40px; z-index:0; width:560px; height:560px; border-radius:50%; background:#e5eee8; pointer-events:none; transform:translateY(-50%); }
+    .results-head::before { content:""; position:absolute; top:52%; right:20px; z-index:0; width:620px; height:430px; border-radius:50%; background:#e5eee8; -webkit-mask-image:linear-gradient(to bottom,#000 78%,transparent 100%); mask-image:linear-gradient(to bottom,#000 78%,transparent 100%); pointer-events:none; transform:translateY(-50%); }
     .results-copy { position:relative; z-index:2; width:50%; }
+    .results-copy .heading-highlight { background:linear-gradient(to bottom,transparent 58%,var(--green) 58%,var(--green) 88%,transparent 88%); }
     .results-copy .button { margin-top:18px; }
+    .results-copy .button.secondary { color:var(--paper); background:var(--green); }
     .results-illustration { position:absolute; top:-1.7cm; right:0; z-index:1; display:block; width:645.1px; height:auto; aspect-ratio:996 / 681; pointer-events:none; user-select:none; }
-    @media (max-width:1024px) and (min-width:769px) { .results-head::before { right:20px; width:420px; height:420px; } .results-illustration { top:-2.1cm; right:-0.7cm; width:483.8px; } }
+    @media (max-width:1024px) and (min-width:769px) { .results-head::before { top:52%; right:10px; width:500px; height:340px; } .results-illustration { top:-2.1cm; right:-0.7cm; width:483.8px; } }
     .card-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
     .menu-card { position:relative; display:flex; flex-direction:column; min-height:270px; padding:22px; border:1px solid var(--line); border-radius:16px; background:var(--paper); box-shadow:0 6px 18px #292a2707; }
     .card-topline { display:flex; align-items:center; justify-content:space-between; min-height:32px; margin-bottom:12px; }
