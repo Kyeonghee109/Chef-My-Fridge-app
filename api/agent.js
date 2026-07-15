@@ -1,10 +1,14 @@
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const { filterByCuisine: filterRecipesByCuisine } = require('./retrieval');
 const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini';
-const SEARCH_MATCH_COUNT = 500;
-const PROMPT_HIT_COUNT = 12;
+// 추천 화면에는 상위 후보 몇 개면 충분합니다. 500개를 내려받으면 Supabase
+// RPC와 Vercel 함수가 불필요하게 오래 걸리고, 이후 정렬 비용도 커집니다.
+const SEARCH_MATCH_COUNT = Number(process.env.RECIPE_SEARCH_MATCH_COUNT || 60);
+const PROMPT_HIT_COUNT = 8;
+const EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large';
 const PROMPT_CONTENT_LIMIT = 900;
 const CUISINES = ['한식', '중식', '양식', '일식'];
+const LEGACY_CUISINE_ALIASES = { '분식': '한식' };
 const INGREDIENT_ALIASES = {
   '훈제연어': '연어', '생연어': '연어', '연어회': '연어',
   '가래떡': '떡', '떡볶이떡': '떡', '떡국떡': '떡',
@@ -24,6 +28,7 @@ function inferCuisine(recipeName, content = '') {
   if (/(짜장|탕수|마파|중화|새우 볶음밥)/.test(text)) return ['중식'];
   if (/(우동|초밥|사시미|일식|일본식|카레)/.test(text)) return ['일식'];
   if (/(파스타|피자|오믈렛|리소토|샐러드|스테이크|양식)/.test(text)) return ['양식'];
+  // 예전 검색 문서의 '분식' 표기도 독립 분류로 되살리지 않고 한식으로 흡수합니다.
   if (/(떡볶이|김밥|김치전|비빔국수|분식)/.test(text)) return ['한식'];
   return ['한식'];
 }
@@ -34,7 +39,7 @@ const env = () => ({
   supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
 });
 
-async function openai(path, body, key, timeoutMs = 20000) {
+async function openai(path, body, key, timeoutMs = 9000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let response;
@@ -55,10 +60,11 @@ async function openai(path, body, key, timeoutMs = 20000) {
 
 async function embed(text, key) {
   const payload = await openai('embeddings', {
-    model: 'text-embedding-3-large',
+    // 레시피 DB와 호환되는 1536차원 large 임베딩을 사용합니다.
+    model: EMBEDDING_MODEL,
     dimensions: 1536,
     input: text
-  }, key);
+  }, key, 20000);
   return payload.data[0].embedding;
 }
 
@@ -67,16 +73,20 @@ const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, millise
 // Supabase 적재·인덱스 갱신 중 발생하는 일시적인 5xx를 짧게 재시도합니다.
 async function fetchSearchWithRetry(url, options, label) {
   let lastError;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let attempt = 1; attempt <= 1; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
     try {
-      const response = await fetch(url, options);
+      const response = await fetch(url, { ...options, signal: controller.signal });
       if (response.ok) return response;
       const detail = await response.text();
       lastError = new Error(`${label} failed (${response.status}): ${detail.slice(0, 240)}`);
     } catch (error) {
       lastError = error;
+    } finally {
+      clearTimeout(timeout);
     }
-    if (attempt < 3) await sleep(400 * (2 ** (attempt - 1)));
+    if (attempt < 1) await sleep(250);
   }
   throw lastError;
 }
@@ -101,7 +111,9 @@ async function searchRecipes(queryEmbedding, config, cuisines = []) {
   try {
     return await (await fetchSearchWithRetry(url, options, 'Supabase search')).json();
   } catch (error) {
-    // 새 RPC가 아직 배포되지 않은 환경에서는 기존 인자 형태로 재시도합니다.
+    // 새 RPC가 아직 배포되지 않은 환경에서만 기존 인자 형태로 재시도합니다.
+    // 타임아웃/5xx까지 재시도하면 사용자 요청이 불필요하게 10초 이상 늘어납니다.
+    if (!/(\(400\)|\(404\))/.test(error.message || '')) throw error;
     const legacyOptions = {
       ...options,
       body: JSON.stringify({ query_embedding: queryEmbedding, match_threshold: -1, match_count: SEARCH_MATCH_COUNT })
@@ -201,6 +213,11 @@ ${context}
 function validBody(body) {
   return body && Array.isArray(body.ingredients) && body.ingredients.length > 0 &&
     body.ingredients.length <= 50 && body.ingredients.every(item => typeof item === 'string' && item.trim());
+}
+
+function normalizeCuisines(cuisines) {
+  if (!Array.isArray(cuisines)) return [];
+  return [...new Set(cuisines.map(cuisine => LEGACY_CUISINE_ALIASES[cuisine] || cuisine))];
 }
 
 // 선택한 음식 종류가 지원 목록에 있고 중복되지 않는지 검증합니다.
@@ -457,16 +474,40 @@ function fallbackMenuFromHit(hit, ownedIngredients) {
   const content = String(hit.content || '');
   const metadata = parseRecipeMetadata(content);
   const requiredIngredients = hit.requiredIngredients?.length ? hit.requiredIngredients : metadata.ingredients;
+  const recipe = metadata.recipe.length
+    ? metadata.recipe
+    : content.split(/[.。]/)
+      .map(step => step.trim())
+      .filter(step => step && !/조리 시간|난이도/.test(step));
   return {
     name: normalizeRecipeName(hit.recipe_name),
     cuisine: hit.cuisine || metadata.cuisine || inferCuisine(hit.recipe_name, content),
     description: cardDescription('', { ...hit, requiredIngredients }),
-    recipe: metadata.recipe,
+    recipe,
     cookTime: resolveCookTime(metadata.cookTime, content, metadata.recipe),
     difficulty: metadata.difficulty || '보통',
     ingredients: requiredIngredients,
     missingIngredients: calculateMissingIngredients(ownedIngredients, requiredIngredients),
     tags: metadata.tags
+  };
+}
+
+// 검색 후보 검증이 부족해도 모델이 반환한 형식이 완전하면 추천을 끊지 않습니다.
+// 이 경로는 RAG 후보 검증 실패 시에만 사용하며, 사용자 입력을 중심으로 한 OpenAI 결과를 보존합니다.
+function usableGeneratedMenu(menu, ownedIngredients) {
+  const name = normalizeRecipeName(menu?.name);
+  const recipe = cleanRecipeSteps(menu?.steps || menu?.recipe);
+  if (!name || !recipe.length) return null;
+  return {
+    name,
+    description: String(menu?.description || `${name}을 추천합니다.`).trim(),
+    cuisine: Array.isArray(menu?.cuisine) ? menu.cuisine.filter(Boolean) : [],
+    recipe,
+    cookTime: String(menu?.cookTime || '20분').trim(),
+    difficulty: /^(쉬움|보통|어려움)$/.test(menu?.difficulty) ? menu.difficulty : '보통',
+    ingredients: Array.isArray(menu?.ingredients) && menu.ingredients.length ? menu.ingredients : ownedIngredients,
+    missingIngredients: Array.isArray(menu?.missingIngredients) ? menu.missingIngredients : [],
+    tags: Array.isArray(menu?.tags) ? menu.tags : []
   };
 }
 
@@ -477,13 +518,15 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'RAG 서버 환경변수가 설정되지 않았습니다.' });
   }
   if (!validBody(req.body)) return res.status(400).json({ error: '재료 입력이 올바르지 않습니다.' });
-  const cuisines = Array.isArray(req.body.cuisines) ? [...new Set(req.body.cuisines)] : [];
+  // 과거 즐겨찾기·기록에서 보낸 분식 요청은 한식으로만 호환 처리합니다.
+  const cuisines = normalizeCuisines(req.body.cuisines);
   if (!validCuisines(cuisines)) return res.status(400).json({ error: '음식 종류 입력이 올바르지 않습니다.' });
 
   try {
     const body = req.body;
     const filters = body.filters && typeof body.filters === 'object' ? body.filters : {};
     const exclude = Array.isArray(body.exclude) ? body.exclude.filter(item => typeof item === 'string').slice(0, 20) : [];
+
     const query = `${body.ingredients.join(', ')} ${cuisines.join(', ')} ${filters.time || ''} ${filters.difficulty || ''} ${filters.diet || ''}`;
     const queryEmbedding = await embed(query, config.openai);
     const selectedHits = await searchRecipes(queryEmbedding, config, cuisines);
@@ -502,7 +545,7 @@ module.exports = async function handler(req, res) {
         : inferCuisine(hit.recipe_name, hit.content)
     }));
     // 벡터 유사도 후보를 재료 매칭 점수와 핵심 재료 우선순위로 재정렬합니다.
-    const rankedHits = rankRecipeHits(body.ingredients, enrichedHits, 20);
+    const rankedHits = rankRecipeHits(body.ingredients, enrichedHits, 40);
 
     // 검색 후보는 충분히 확보하되, LLM 컨텍스트는 제한해 요청 크기 초과를 방지합니다.
     const promptHits = rankedHits.slice(0, PROMPT_HIT_COUNT);
@@ -511,12 +554,13 @@ module.exports = async function handler(req, res) {
       const answer = await openai('chat/completions', {
         model: CHAT_MODEL,
         response_format: { type: 'json_object' },
+        // 5~7단계 조리법 3개가 잘리지 않도록 충분한 출력 토큰을 확보합니다.
         max_tokens: 6000,
         messages: [
           { role: 'system', content: '검색 문서에 근거한 JSON만 반환하세요.' },
           { role: 'user', content: promptFor({ ingredients: body.ingredients, filters: { ...filters, cuisines }, exclude, hits: promptHits }) }
         ]
-      }, config.openai, 12000);
+      }, config.openai, 16000);
       const result = JSON.parse(answer.choices?.[0]?.message?.content || '{}');
       generatedMenus = Array.isArray(result.menus) ? result.menus : [];
     } catch (error) {
@@ -578,6 +622,14 @@ module.exports = async function handler(req, res) {
       } catch (error) {
         console.error('Relaxed candidate search failed:', error.message);
       }
+    }
+    // 검색 문서의 재료 메타데이터가 불완전해 엄격 검증에 통과하지 못해도,
+    // OpenAI가 완전한 메뉴 객체를 반환했다면 첫 추천을 실패시키지 않습니다.
+    for (const generated of generatedMenus.map(menu => usableGeneratedMenu(menu, body.ingredients)).filter(Boolean)) {
+      if (menus.length >= 3) break;
+      if (seenNames.has(normalizedMenuName(generated.name)) || exclude.some(name => normalizedMenuName(name) === normalizedMenuName(generated.name))) continue;
+      menus.push(generated);
+      seenNames.add(normalizedMenuName(generated.name));
     }
     if (validationFailures.length) {
       console.warn('Recommendation validation failures:', JSON.stringify(validationFailures));

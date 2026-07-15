@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 FIXED_CUISINES = {"한식", "중식", "양식", "일식"}
+LEGACY_CUISINE_ALIASES = {"분식": "한식"}
 
 load_dotenv()
 from langfuse import get_client
@@ -41,11 +42,12 @@ class RecommendRequest(BaseModel):
     @field_validator("cuisines")
     @classmethod
     def validate_cuisines(cls, values: list[str]) -> list[str]:
-        """선택한 음식 종류가 고정된 다섯 카테고리에 포함되는지 확인합니다."""
-        invalid = set(values) - FIXED_CUISINES
+        """네 가지 음식 종류만 허용하되, 기존 분식 요청은 한식으로 호환합니다."""
+        normalized = [LEGACY_CUISINE_ALIASES.get(value, value) for value in values]
+        invalid = set(normalized) - FIXED_CUISINES
         if invalid:
             raise ValueError(f"지원하지 않는 음식 종류입니다: {', '.join(sorted(invalid))}")
-        return list(dict.fromkeys(values))
+        return list(dict.fromkeys(normalized))
 
 
 @lru_cache(maxsize=1)

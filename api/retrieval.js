@@ -4,6 +4,7 @@ const ALIASES = {
   '오뎅': '어묵', '부산어묵': '어묵', '어묵꼬치': '어묵',
   '칵테일새우': '새우', '새우살': '새우'
 };
+const LEGACY_CUISINE_ALIASES = { '분식': '한식' };
 
 function assertIngredients(value, name) {
   if (!Array.isArray(value)) throw new TypeError(`${name}은 배열이어야 합니다.`);
@@ -59,12 +60,13 @@ function calculateMissingIngredients(userIngredients, recipeIngredients) {
 function filterByCuisine(recipes, selectedCuisines) {
   assertIngredients(recipes, 'recipes');
   assertIngredients(selectedCuisines, 'selectedCuisines');
-  if (selectedCuisines.length === 0) return recipes;
+  const normalizedCuisines = [...new Set(selectedCuisines.map(cuisine => LEGACY_CUISINE_ALIASES[cuisine] || cuisine))];
+  if (normalizedCuisines.length === 0) return recipes;
   return recipes.filter(recipe => {
     const cuisine = Array.isArray(recipe.cuisine)
       ? recipe.cuisine
       : Array.isArray(recipe.metadata?.cuisine) ? recipe.metadata.cuisine : [];
-    return cuisine.some(value => selectedCuisines.includes(value));
+    return cuisine.some(value => normalizedCuisines.includes(value));
   });
 }
 

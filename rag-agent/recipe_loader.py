@@ -6,6 +6,7 @@ from typing import Any
 
 
 FIXED_CUISINES = {"한식", "중식", "양식", "일식"}
+LEGACY_CUISINE_ALIASES = {"분식": "한식"}
 
 
 def format_ingredient(value: Any) -> str:
@@ -29,6 +30,8 @@ def load_recipes(path: str | Path) -> list[dict[str, Any]]:
             raise ValueError(f"레시피 {index}의 ingredients와 steps는 배열이어야 합니다.")
         if any(not isinstance(item, (str, dict)) or (isinstance(item, dict) and not item.get("name")) for item in recipe["ingredients"]):
             raise ValueError(f"레시피 {index}의 ingredients 항목은 문자열 또는 name을 가진 객체여야 합니다.")
+        if isinstance(recipe["cuisine"], list):
+            recipe["cuisine"] = list(dict.fromkeys(LEGACY_CUISINE_ALIASES.get(value, value) for value in recipe["cuisine"]))
         if not isinstance(recipe["cuisine"], list) or not recipe["cuisine"] or not set(recipe["cuisine"]).issubset(FIXED_CUISINES):
             raise ValueError(f"레시피 {index}의 cuisine은 고정 카테고리 배열이어야 합니다.")
     return data

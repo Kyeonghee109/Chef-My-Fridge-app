@@ -47,8 +47,52 @@ STYLES = [
     ("일식", "덮밥", "덮밥", ["쯔유 2큰술", "밥 1공기"], 25),
     ("일식", "카레", "카레", ["카레가루 2큰술", "밥 1공기"], 35),
     ("일식", "우동", "면 요리", ["우동면 1봉", "쯔유 2큰술"], 20),
-    ("한식", "떡볶이", "분식", ["고추장 2큰술", "물엿 1큰술"], 25),
+    ("한식", "떡볶이", "떡 요리", ["고추장 2큰술", "물엿 1큰술"], 25),
 ]
+
+# 음식명 자체가 조리법 이상의 뜻을 가지는 경우, 제목을 쓰기 전에 실제 재료를
+# 확인한다. 각 튜플은 모두 충족해야 하는 재료 그룹이며, 그룹 안의 단어는 하나만
+# 포함되어도 된다. 예: 김밥은 "김"과 "쌀/밥" 그룹을 모두 충족해야 한다.
+METHOD_REQUIREMENTS: dict[str, tuple[tuple[str, ...], ...]] = {
+    "마파": (("두부",),),
+    "리소토": (("쌀", "밥"),),
+    "김밥": (("김",), ("쌀", "밥")),
+    "샌드위치": (("식빵", "빵", "바게트", "베이글", "또르띠야", "토르티야", "번"),),
+    "딤섬": (("만두피", "반죽", "밀가루", "피"),),
+    "파스타": (("파스타면", "스파게티", "펜네", "링귀니", "페투치네", "마카로니"),),
+    "국수": (("국수", "소면", "면", "우동면"),),
+    "떡볶이": (("떡",),),
+    "덮밥": (("쌀", "밥"),),
+}
+
+# 필수 재료가 없는 특수 음식명은 재료 조합에 무리 없이 쓸 수 있는 일반 조리법으로
+# 바꾼다. 딤섬만은 만두피 없이도 찐 요리로 안전하게 표현할 수 있어 찜으로 대체한다.
+SPECIAL_METHOD_FALLBACKS: dict[str, tuple[str, str, str]] = {
+    "마파": ("볶음", "볶음", "두반장"),
+    "리소토": ("볶음", "볶음", "버터"),
+    "김밥": ("볶음", "볶음", "참기름"),
+    "샌드위치": ("볶음", "볶음", "치즈"),
+    "딤섬": ("찜", "찜", "참기름"),
+    "파스타": ("볶음", "볶음", "올리브유"),
+    "국수": ("무침", "무침", "고추장"),
+    "떡볶이": ("볶음", "볶음", "고추장"),
+    "덮밥": ("볶음", "볶음", "간장"),
+}
+
+# 조건을 충족한 특수 음식명도 제목에서는 완결된 음식명으로 표기한다.
+METHOD_DISPLAY_SUFFIXES = {"마파": "마파두부"}
+
+# 카테고리 균형을 위해 추가하는 레시피는 숫자가 아니라 제목과 재료에 모두 드러나는
+# 실제 풍미 차이를 사용한다. 프로필 수를 넘는 변형이 필요하면 생성기를 중단시켜
+# 같은 제목에 임의 번호를 붙이는 일이 다시 생기지 않게 한다.
+VARIANT_PROFILES: tuple[tuple[str, tuple[str, ...], int], ...] = (
+    ("고소한 참깨", ("참깨 1작은술",), 0),
+    ("매콤한 고추", ("고춧가루 1작은술",), 5),
+    ("버터 풍미", ("버터 1큰술",), 5),
+    ("간장 풍미", ("간장 1큰술",), 0),
+    ("허브 향", ("말린 허브 1작은술",), 0),
+    ("채소 듬뿍", ("파프리카 1/2개",), 5),
+)
 
 FIXED_CUISINES = {"한식", "중식", "양식", "일식"}
 EXISTING_CUISINES = {
@@ -63,12 +107,56 @@ EXISTING_CUISINES = {
 }
 
 
-def make_recipe(recipe_id: int, style: tuple, main: tuple[str, str], vegetable: tuple[str, str], variant: int = 0) -> dict:
-    """주재료·채소·조리법 조합 하나를 표준 레시피 문서로 만듭니다."""
+def ingredient_name(value: str) -> str:
+    """'재료 수량' 문자열에서 재료명만 돌려준다."""
+    parts = value.rsplit(" ", 1)
+    return parts[0] if len(parts) == 2 else value
+
+
+def meets_method_requirements(suffix: str, ingredient_names: set[str]) -> bool:
+    """특수 음식명에 필요한 핵심 재료가 모두 있는지 확인한다."""
+    groups = METHOD_REQUIREMENTS.get(suffix)
+    if not groups:
+        return True
+    return all(any(required in name for name in ingredient_names for required in group) for group in groups)
+
+
+def resolve_style(style: tuple, ingredient_names: set[str]) -> tuple:
+    """재료와 맞지 않는 특수 음식명은 안전한 일반 조리법으로 바꾼다."""
     category, suffix, tag, sauce, cook_time = style
+    if meets_method_requirements(suffix, ingredient_names):
+        return style
+    fallback_suffix, fallback_tag, _ = SPECIAL_METHOD_FALLBACKS[suffix]
+    return category, fallback_suffix, fallback_tag, sauce, cook_time
+
+
+def style_requirements_met(style: tuple, main: tuple[str, str], vegetable: tuple[str, str]) -> bool:
+    """변형 배치 전에 해당 조리법이 이 재료 조합에서 성립하는지 판단한다."""
     main_name, main_amount = main
     vegetable_name, vegetable_amount = vegetable
-    raw_ingredients = [f"{main_name} {main_amount}", f"{vegetable_name} {vegetable_amount}", "양파 1/2개", "마늘 1쪽", *sauce]
+    raw_ingredients = [f"{main_name} {main_amount}", f"{vegetable_name} {vegetable_amount}", "양파 1/2개", "마늘 1쪽", *style[3]]
+    ingredient_names = {ingredient_name(value) for value in raw_ingredients}
+    return meets_method_requirements(style[1], ingredient_names)
+
+
+def get_variant_profile(variant: int) -> tuple[str, tuple[str, ...], int] | None:
+    """0은 기본 레시피, 1부터는 재료가 다른 의미 있는 변형을 반환한다."""
+    if not variant:
+        return None
+    if variant > len(VARIANT_PROFILES):
+        raise ValueError(f"변형 프로필이 부족합니다: {variant}번째 변형")
+    return VARIANT_PROFILES[variant - 1]
+
+
+def make_recipe(recipe_id: int, style: tuple, main: tuple[str, str], vegetable: tuple[str, str], variant: int = 0) -> dict:
+    """주재료·채소·조리법 조합 하나를 표준 레시피 문서로 만듭니다."""
+    main_name, main_amount = main
+    vegetable_name, vegetable_amount = vegetable
+    variant_profile = get_variant_profile(variant)
+    variant_ingredients = list(variant_profile[1]) if variant_profile else []
+    raw_ingredients = [f"{main_name} {main_amount}", f"{vegetable_name} {vegetable_amount}", "양파 1/2개", "마늘 1쪽", *style[3], *variant_ingredients]
+    ingredient_names = {ingredient_name(value) for value in raw_ingredients}
+    category, suffix, tag, sauce, cook_time = resolve_style(style, ingredient_names)
     unique_ingredients = []
     seen_ingredients = set()
     for value in raw_ingredients:
@@ -81,8 +169,13 @@ def make_recipe(recipe_id: int, style: tuple, main: tuple[str, str], vegetable: 
         if name not in seen_ingredients:
             unique_ingredients.append(item)
             seen_ingredients.add(name)
-    title = f"{main_name} {vegetable_name} {suffix}" + (f" {variant}번" if variant else "")
-    variant_offset = [0, -10, -5, 5, 10, 20][variant % 6] if variant else 0
+    fallback_modifier = ""
+    if suffix != style[1]:
+        fallback_modifier = f" {SPECIAL_METHOD_FALLBACKS[style[1]][2]}"
+    variant_label = f" {variant_profile[0]}" if variant_profile else ""
+    display_suffix = METHOD_DISPLAY_SUFFIXES.get(suffix, suffix)
+    title = f"{main_name} {vegetable_name}{fallback_modifier}{variant_label} {display_suffix}"
+    variant_offset = variant_profile[2] if variant_profile else 0
     effective_cook_time = max(10, min(60, cook_time + variant_offset))
     difficulty = "쉬움" if effective_cook_time <= 20 else "보통" if effective_cook_time <= 35 else "어려움"
     return {
@@ -105,16 +198,20 @@ def make_recipe(recipe_id: int, style: tuple, main: tuple[str, str], vegetable: 
 
 
 def add_existing_cuisine(recipe: dict) -> dict:
-    """기존 샘플 레시피에 고정된 5개 음식 종류 중 알맞은 값을 추가합니다."""
+    """기존 샘플 레시피를 네 가지 고정 음식 종류로 정규화합니다."""
     # 사용자가 지정한 예외 분류 규칙을 가장 먼저 적용합니다.
     difficulty = recipe.get("difficulty") or ("쉬움" if recipe.get("cook_time", 30) <= 20 else "보통" if recipe.get("cook_time", 30) <= 35 else "어려움")
     if "죽" in recipe["title"]:
         return {**recipe, "cuisine": ["한식"], "difficulty": difficulty}
     if "스프" in recipe["title"] or "수프" in recipe["title"]:
         return {**recipe, "cuisine": ["양식"], "difficulty": difficulty}
+    # 과거 데이터에 남아 있을 수 있는 분식 분류는 파일을 직접 바꾸지 않아도
+    # 재생성 시 한식으로 흡수한다.
+    legacy_cuisines = ["한식" if value == "분식" else value for value in recipe.get("cuisine", [])]
     cuisine = EXISTING_CUISINES.get(recipe["title"])
     if cuisine is None:
-        cuisine = [tag for tag in recipe.get("tags", []) if tag in FIXED_CUISINES] or ["한식"]
+        cuisine = [value for value in legacy_cuisines if value in FIXED_CUISINES]
+        cuisine = cuisine or [tag for tag in recipe.get("tags", []) if tag in FIXED_CUISINES] or ["한식"]
     return {**recipe, "cuisine": cuisine, "difficulty": difficulty}
 
 
@@ -133,23 +230,41 @@ def main() -> None:
         if recipe["title"] not in titles:
             generated.append(recipe)
             titles.add(recipe["title"])
-    # 한식에 비해 부족한 카테고리는 조리법 변형 레시피를 추가해 분포를 균형화합니다.
+    # 한식에 비해 부족한 카테고리는 각 재료 조합에 변형을 고르게 분산한다.
+    # 기존처럼 한 조합에 '1번', '2번'을 수천 개 붙이지 않는다.
     target_count = max(sum(1 for recipe in existing if "한식" in recipe.get("cuisine", [])), 4000)
     counts = {cuisine: sum(1 for recipe in existing + generated if cuisine in recipe.get("cuisine", [])) for cuisine in FIXED_CUISINES}
-    variant = 1
-    for style, main, vegetable in product(STYLES, MAIN_INGREDIENTS, VEGETABLES):
-        cuisine = style[0]
-        if cuisine == "한식":
-            continue
+    for cuisine in ("한식", "양식", "중식", "일식"):
+        cuisine_styles = [style for style in STYLES if style[0] == cuisine]
+        # 재료 조합 하나에 변형을 몰아넣지 않고, 각 조리법을 번갈아 배치한다.
+        # 특수 음식명은 조건을 충족하는 재료 조합을 먼저 배치해 유효한 김밥·파스타
+        # 등의 다양성도 함께 확보한다.
+        style_combinations = []
+        for style in cuisine_styles:
+            pairs = list(product(MAIN_INGREDIENTS, VEGETABLES))
+            pairs.sort(key=lambda pair: not style_requirements_met(style, *pair))
+            style_combinations.append((style, pairs))
+        combinations = [
+            (style, pairs[pair_index][0], pairs[pair_index][1])
+            for pair_index in range(len(MAIN_INGREDIENTS) * len(VEGETABLES))
+            for style, pairs in style_combinations
+        ]
+        attempt = 0
+        max_attempts = len(combinations) * len(VARIANT_PROFILES)
         while counts[cuisine] < target_count:
+            if attempt >= max_attempts:
+                raise ValueError(f"{cuisine} 카테고리를 채울 변형 조합이 부족합니다.")
+            style, main, vegetable = combinations[attempt % len(combinations)]
+            variant = attempt // len(combinations) + 1
+            attempt += 1
             recipe = make_recipe(recipe_id, style, main, vegetable, variant)
             recipe_id += 1
-            variant += 1
             if recipe["title"] in titles:
                 continue
             generated.append(recipe)
             titles.add(recipe["title"])
             counts[cuisine] += 1
+
     recipes = existing + generated
     data_path.write_text(json.dumps(recipes, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"레시피 생성 완료: {len(recipes)}개")

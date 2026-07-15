@@ -7,7 +7,8 @@ from typing import Any, Iterable
 
 
 DEFAULT_ALIASES_PATH = Path(__file__).with_name("ingredient_aliases.json")
-FIXED_CUISINES = {"한식", "중식", "양식", "일식", "분식"}
+FIXED_CUISINES = {"한식", "중식", "양식", "일식"}
+LEGACY_CUISINE_ALIASES = {"분식": "한식"}
 CORE_INGREDIENTS = {"연어", "어묵", "떡", "새우", "닭가슴살", "닭고기", "브로콜리", "당근", "파스타면", "버섯", "우유"}
 QUANTITY_PATTERN = re.compile(
     r"(?:\d+(?:[./]\d+)?|반|한|두|세|네|다섯)\s*"
@@ -22,10 +23,15 @@ def load_aliases(path: str | Path = DEFAULT_ALIASES_PATH) -> dict[str, str]:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def normalize_ingredient(value: str, aliases: dict[str, str] | None = None) -> str:
+def ingredient_name(value: Any) -> str:
+    """문자열 재료와 {name, amount, unit} 재료에서 비교 대상 이름만 꺼냅니다."""
+    return str(value.get("name", "")) if isinstance(value, dict) else str(value or "")
+
+
+def normalize_ingredient(value: str | dict[str, Any], aliases: dict[str, str] | None = None) -> str:
     """수량·손질 표현·공백을 제거하고 동의어를 canonical 재료명으로 변환합니다."""
     aliases = aliases or load_aliases()
-    normalized = str(value or "").strip().casefold()
+    normalized = ingredient_name(value).strip().casefold()
     normalized = QUANTITY_PATTERN.sub(" ", normalized)
     normalized = PREPARATION_WORDS.sub(" ", normalized)
     normalized = re.sub(r"\([^)]*\)|\[[^]]*\]", " ", normalized)
@@ -70,7 +76,7 @@ def calculate_match_score(
 
 def filter_candidates_by_cuisines(candidates: Iterable[dict[str, Any]], cuisines: Iterable[str]) -> list[dict[str, Any]]:
     """선택한 음식 종류 중 하나라도 레시피 cuisine과 겹치는 후보만 남깁니다(OR 조건)."""
-    selected = set(cuisines) & FIXED_CUISINES
+    selected = {LEGACY_CUISINE_ALIASES.get(cuisine, cuisine) for cuisine in cuisines} & FIXED_CUISINES
     if not selected:
         return list(candidates)
     return [candidate for candidate in candidates if selected.intersection(candidate["recipe"].get("cuisine", []))]
