@@ -46,11 +46,11 @@
     .panel { padding:28px; border:1px solid var(--line); border-radius:18px; background:var(--paper); box-shadow:0 8px 24px #292a2709; }
     .panel-head { display:flex; justify-content:space-between; align-items:end; gap:20px; margin-bottom:22px; }
     .muted { color:var(--muted); }
-    .tag-grid { display:flex; flex-wrap:wrap; gap:10px; }
-    .tag { display:inline-flex; flex:0 0 auto; align-items:center; justify-content:center; width:auto; min-width:0; height:44px; box-sizing:border-box; margin:0; padding:0 18px; border:1px solid var(--line); border-radius:14px; color:var(--ink); background:var(--paper); box-shadow:0 1px 4px #292a270f; font:400 16px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; transition:background-color .18s ease,color .18s ease,border-color .18s ease; white-space:nowrap; vertical-align:top; appearance:none; position:static; transform:none !important; }
+    .tag-grid { display:flex; flex-wrap:wrap; align-items:flex-start; gap:10px; }
+    .tag { display:inline-flex; flex:0 0 auto; align-items:center; justify-content:center; width:auto; min-width:0; height:44px; box-sizing:border-box; margin:0; padding:0 18px; border:1px solid var(--line); border-radius:14px; color:var(--ink); background:var(--paper); box-shadow:0 1px 4px #292a270f; font:400 16px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-weight:400; line-height:1; transition:background-color .18s ease,color .18s ease,border-color .18s ease; white-space:nowrap; vertical-align:top; appearance:none; position:static; transform:none !important; }
     .tag:hover, .tag:focus, .tag:focus-visible, .tag:active { border-color:var(--green); outline:none; transform:none !important; }
     .tag:focus-visible { box-shadow:0 0 0 3px #216b5120; }
-    .tag.selected { border-width:1px; border-color:var(--green); color:var(--paper); background:var(--green); font-weight:400; position:static; transform:none !important; }
+    .tag.selected { width:auto; min-width:0; height:44px; margin:0; padding:0 18px; border-width:1px; border-color:var(--green); color:var(--paper); background:var(--green); font-size:16px; font-weight:400; line-height:1; position:static; transform:none !important; }
     .cuisine-section .tag.selected::before { content:"✓"; margin-right:6px; font-weight:800; }
     .custom-form { display:flex; gap:10px; margin-top:22px; }
     input, select { width:100%; min-width:0; padding:13px 15px; border:1px solid var(--line); border-radius:13px; color:var(--ink); background:var(--paper); outline:none; }
@@ -195,7 +195,7 @@
     <section class="screen story-selection" id="ingredientsScreen">
       <div class="panel">
         <div class="ingredient-guide"><span class="ingredient-guide-icon" aria-hidden="true">🍴</span><p>냉장고 속 재료를 선택하면 AI가<br>지금 만들 수 있는 메뉴를 추천해드려요.</p></div>
-        <div class="panel-head"><div><p class="eyebrow">01 / Ingredients</p><h2>냉장고를 열어볼까요?</h2></div><p class="muted"><span class="ingredient-prompt-icon" aria-hidden="true">✨</span>재료를 하나 이상 골라주세요.</p></div>
+        <div class="panel-head"><div><p class="eyebrow">01 / Ingredients</p><h2>냉장고를 열어볼까요?</h2></div><p class="muted">재료를 하나 이상 골라주세요.</p></div>
         <div class="tag-grid" id="ingredientGrid"></div>
         <form class="custom-form" id="customForm"><input id="customInput" aria-label="기타 재료" placeholder="기타 재료를 입력해보세요 (예: 참깨, 마요네즈)"><button class="button secondary" type="submit">재료 추가</button></form>
         <div class="selected-head"><p class="selected-label">🧺 선택한 재료</p><button class="clear-selected" id="clearIngredients" type="button">전체 지우기</button></div>
@@ -314,7 +314,7 @@
     function reset() { cancelRequest(); state.screen='ingredients'; state.selectedIngredients=[]; state.selectedCuisines=[]; state.menus=[]; state.currentMenu=null; state.previousMenuNames=[]; state.error=''; heroDismissed=false; hero.hidden=false; hero.style.setProperty('--hero-opacity','1'); hero.style.setProperty('--hero-scale','1'); hero.style.setProperty('--hero-y','0px'); $('#customInput').value=''; $('#timeFilter').value=''; $('#difficultyFilter').value=''; $('#dietFilter').value=''; syncCustomSelects(); setError(); setStatus(''); renderIngredients(); showScreen('ingredients'); }
     $('#customForm').addEventListener('submit',event=>{ event.preventDefault(); addIngredients($('#customInput').value.split(',')); $('#customInput').value=''; });
     $('#clearIngredients').addEventListener('click',clearIngredients);
-    $('#heroCta').addEventListener('click',()=>{ const start=window.scrollY; const target=ingredientsScreen.getBoundingClientRect().top+window.scrollY; const duration=750; const started=performance.now(); const animate=now=>{ const progress=Math.min((now-started)/duration,1); const eased=progress<.5?2*progress*progress:1-Math.pow(-2*progress+2,2)/2; window.scrollTo(0,start+(target-start)*eased); if(progress<1) requestAnimationFrame(animate); }; requestAnimationFrame(animate); });
+    $('#heroCta').addEventListener('click',()=>{ const root=document.documentElement; const previousBehavior=root.style.scrollBehavior; root.style.scrollBehavior='auto'; const start=window.scrollY; const target=ingredientsScreen.getBoundingClientRect().top+window.scrollY; const duration=750; const started=performance.now(); const animate=now=>{ const progress=Math.min((now-started)/duration,1); const eased=progress<.5?2*progress*progress:1-Math.pow(-2*progress+2,2)/2; window.scrollTo({top:start+(target-start)*eased,left:0,behavior:'auto'}); if(progress<1) requestAnimationFrame(animate); else { window.scrollTo({top:target,left:0,behavior:'auto'}); root.style.scrollBehavior=previousBehavior; } }; requestAnimationFrame(animate); });
     $('#recommendButton').addEventListener('click',requestMenus);
     $('#anotherButton').addEventListener('click',event=>{ event.preventDefault(); requestMenus(); });
     $('#backToIngredients').addEventListener('click',()=>{ cancelRequest(); setError(); showScreen('ingredients'); });
