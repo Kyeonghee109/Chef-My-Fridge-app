@@ -424,7 +424,7 @@ module.exports = async function handler(req, res) {
       const answer = await openai('chat/completions', {
         model: CHAT_MODEL,
         response_format: { type: 'json_object' },
-        max_tokens: 1400,
+        max_tokens: 3000,
         messages: [
           { role: 'system', content: '검색 문서에 근거한 JSON만 반환하세요.' },
           { role: 'user', content: promptFor({ ingredients: body.ingredients, filters: { ...filters, cuisines }, exclude, hits: promptHits }) }
