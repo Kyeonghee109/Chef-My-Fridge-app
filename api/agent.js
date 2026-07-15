@@ -377,12 +377,13 @@ function selectCookTimeDiverseMenus(candidates, topK = 3) {
 }
 
 // 사용자가 고른 재료를 기준으로 레시피의 부족 재료를 서버에서 확정합니다.
-function calculateMissingIngredients(ownedIngredients, requiredIngredients) {
+function calculateMissingIngredients(ownedIngredients, requiredIngredients, explicitCoreKeys = []) {
   const owned = new Set((Array.isArray(ownedIngredients) ? ownedIngredients : []).map(canonicalIngredient).filter(Boolean));
+  const allowedKeys = explicitCoreKeys.length ? new Set(explicitCoreKeys.map(canonicalIngredient)) : null;
   const seen = new Set();
   return (Array.isArray(requiredIngredients) ? requiredIngredients : []).filter(item => {
     const key = canonicalIngredient(item);
-    if (!key || owned.has(key) || seen.has(key)) return false;
+    if (!key || owned.has(key) || seen.has(key) || (allowedKeys && !allowedKeys.has(key)) || (!allowedKeys && isPantryIngredient(key))) return false;
     seen.add(key);
     return true;
   });
@@ -414,7 +415,7 @@ function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = t
   if (!hit) failures.push('검색 후보에 없는 메뉴');
   const requiredIngredients = hit?.requiredIngredients || [];
   const matchedIngredients = requiredIngredients.filter(item => ownedIngredients.some(owned => canonicalIngredient(owned) === canonicalIngredient(item)));
-  const expectedMissing = calculateMissingIngredients(ownedIngredients, requiredIngredients);
+  const expectedMissing = calculateMissingIngredients(ownedIngredients, requiredIngredients, hit?.metadata?.core_ingredient_keys || []);
   if (strictCuisine && cuisines.length && !hit?.cuisine?.some(cuisine => cuisines.includes(cuisine))) {
     failures.push(`선택 cuisine 불일치: ${hit?.cuisine?.join(', ') || '없음'}`);
   }
@@ -598,7 +599,7 @@ function fallbackMenuFromHit(hit, ownedIngredients) {
     cookTime: resolveCookTime(metadata.cookTime, content, metadata.recipe),
     difficulty: metadata.difficulty || '보통',
     ingredients: requiredIngredients,
-    missingIngredients: calculateMissingIngredients(ownedIngredients, requiredIngredients),
+    missingIngredients: calculateMissingIngredients(ownedIngredients, requiredIngredients, hit?.metadata?.core_ingredient_keys || []),
     tags: metadata.tags
   };
 }
@@ -661,8 +662,10 @@ module.exports = async function handler(req, res) {
     // 벡터 유사도 후보를 재료 매칭 점수와 핵심 재료 우선순위로 재정렬합니다.
     const timeLimit = timeLimitMinutes(filters.time);
     const rankedHits = rankRecipeHits(body.ingredients, enrichedHits, 40)
-      .filter(hit => missingCoreIngredients(body.ingredients, hit.requiredIngredients, hit.metadata?.core_ingredient_keys || []).length === 0)
-      .filter(hit => isWithinTimeLimit(hit, timeLimit));
+      .map(hit => ({ ...hit, missingCore: missingCoreIngredients(body.ingredients, hit.requiredIngredients, hit.metadata?.core_ingredient_keys || []) }))
+      .filter(hit => hit.missingCore.length <= 2)
+      .filter(hit => isWithinTimeLimit(hit, timeLimit))
+      .sort((left, right) => left.missingCore.length - right.missingCore.length || right.finalScore - left.finalScore);
     if (!rankedHits.length) return res.status(404).json({ error: '보유한 핵심 재료와 시간 조건을 모두 만족하는 레시피를 찾지 못했습니다.' });
 
     // 검색 후보는 충분히 확보하되, LLM 컨텍스트는 제한해 요청 크기 초과를 방지합니다.
