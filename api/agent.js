@@ -397,7 +397,7 @@ function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = t
   if (matchedIngredients.length < 1) failures.push('사용자 재료와 실제 교집합 없음');
   if (!sameIngredientList(menu?.missingIngredients, expectedMissing)) failures.push('missingIngredients 계산 불일치');
   const generatedRecipe = cleanRecipeSteps(menu?.steps || menu?.recipe);
-  const sourceRecipe = hasCompleteRecipeSource(hit?.content) ? extractRecipeSteps(hit?.content) : [];
+  const sourceRecipe = hasCompleteRecipeSource(hit?.content) ? cleanRecipeSteps(extractRecipeSteps(hit?.content)) : [];
   return {
     ok: failures.length === 0,
     failures,
@@ -452,8 +452,21 @@ function splitRecipeStepText(value) {
   if (!text) return [];
   return text
     .split(/(?<=[.!?。])\s+/)
-    .map(step => removeOverallCookTime(step.trim().replace(/^[-•]\s*/, '').replace(/^[.。\s]+|[.。\s]+$/g, '')))
+    .map(step => normalizeRecipeStep(removeOverallCookTime(step.trim().replace(/^[-•]\s*/, '').replace(/^[.。\s]+|[.。\s]+$/g, ''))))
     .filter(Boolean);
+}
+
+// 화면에서 단계 번호는 목록 UI가 표시하므로, 원문에 섞인 번호 참조는 제거해
+// 모든 레시피가 같은 형식으로 보이도록 합니다.
+function normalizeRecipeStep(value) {
+  return String(value || '')
+    .replace(/\s*[([（]\s*[①②③④⑤⑥⑦⑧⑨⑩]\s*[)\])）]\s*/gu, '')
+    .replace(/(^|\s)[①②③④⑤⑥⑦⑧⑨⑩](?=\s|[,.，。])/gu, '$1')
+    .replace(/(^|\s)(?:\d{1,2}\s*(?:번|단계)?\s*에)\s+/gu, '$1')
+    .replace(/(^|\s)(?:\d{1,2}\s*[.)、:：-])\s*/gu, '$1')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
 }
 
 // 조리 시간은 상세 화면 상단 메타 정보로 이미 표시하므로, 단계 마지막에
