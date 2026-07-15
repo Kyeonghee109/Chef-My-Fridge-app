@@ -123,11 +123,61 @@ function mergeRecipeChunks(hits) {
   });
   return [...grouped.values()].map(({ _chunks, ...hit }) => ({
     ...hit,
-    content: _chunks
-      .sort((left, right) => left.index - right.index)
-      .map(chunk => chunk.content)
-      .join(' ')
+    content: joinRecipeChunks(_chunks)
   }));
+}
+
+// 적재 시 청크끼리 겹치는 구간이 있으므로, 단순히 공백으로 이어 붙이면
+// 같은 문장이 반복되거나 조리 문장이 청크 경계에서 어색하게 끊길 수 있습니다.
+function joinRecipeChunks(chunks) {
+  const ordered = [...chunks].sort((left, right) => left.index - right.index);
+  return ordered.reduce((result, chunk) => {
+    const content = String(chunk.content || '');
+    if (!result) return content;
+    const maxOverlap = Math.min(100, result.length, content.length);
+    let overlap = 0;
+    for (let size = maxOverlap; size >= 1; size -= 1) {
+      if (result.endsWith(content.slice(0, size))) {
+        overlap = size;
+        break;
+      }
+    }
+    return result + (overlap ? content.slice(overlap) : ` ${content}`);
+  }, '');
+}
+
+// 벡터 검색은 레시피의 일부 청크만 반환할 수 있으므로, 후보 레시피의 전체
+// 청크를 한 번 더 조회해 상세 화면에 전달할 조리 순서를 완성합니다.
+async function hydrateRecipeChunks(hits, config) {
+  const names = [...new Set((Array.isArray(hits) ? hits : []).map(hit => hit?.recipe_name).filter(Boolean))].slice(0, 100);
+  if (!names.length) return hits;
+  const quotedNames = names.map(name => `"${String(name).replace(/"/g, '\\\"')}"`).join(',');
+  const params = new URLSearchParams({
+    select: 'recipe_name,content,metadata',
+    recipe_name: `in.(${quotedNames})`
+  });
+  try {
+    const response = await fetchSearchWithRetry(
+      `${config.supabaseUrl}/rest/v1/recipe_chunks?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          apikey: config.supabaseKey,
+          authorization: `Bearer ${config.supabaseKey}`
+        }
+      },
+      'Supabase recipe hydration'
+    );
+    const completeByName = new Map(mergeRecipeChunks(await response.json()).map(hit => [hit.recipe_name, hit]));
+    return (Array.isArray(hits) ? hits : []).map(hit => {
+      const complete = completeByName.get(hit.recipe_name);
+      return complete ? { ...hit, content: complete.content, metadata: { ...hit.metadata, ...complete.metadata } } : hit;
+    });
+  } catch (error) {
+    // 상세 조회가 일시적으로 실패해도 기존 검색 결과로 추천은 계속합니다.
+    console.warn('Recipe chunk hydration failed:', error.message);
+    return hits;
+  }
 }
 
 function promptFor({ ingredients, filters, exclude, hits }) {
@@ -427,7 +477,7 @@ module.exports = async function handler(req, res) {
     const query = `${body.ingredients.join(', ')} ${cuisines.join(', ')} ${filters.time || ''} ${filters.difficulty || ''} ${filters.diet || ''}`;
     const queryEmbedding = await embed(query, config.openai);
     const selectedHits = await searchRecipes(queryEmbedding, config, cuisines);
-    const selectedUniqueHits = mergeRecipeChunks(selectedHits);
+    const selectedUniqueHits = await hydrateRecipeChunks(mergeRecipeChunks(selectedHits), config);
     const preferredHits = filterByCuisine(selectedUniqueHits, cuisines);
     const allHits = cuisines.length ? preferredHits : selectedUniqueHits;
     if (!allHits.length) return res.status(404).json({ error: '선택한 음식 종류의 레시피를 찾지 못했습니다.' });
@@ -498,7 +548,7 @@ module.exports = async function handler(req, res) {
     if (menus.length < 3 && cuisines.length) {
       try {
         const relaxedHits = await searchRecipes(queryEmbedding, config, []);
-        const relaxedUniqueHits = mergeRecipeChunks(relaxedHits);
+        const relaxedUniqueHits = await hydrateRecipeChunks(mergeRecipeChunks(relaxedHits), config);
         const relaxedEnriched = relaxedUniqueHits.map(hit => ({
           ...hit,
           requiredIngredients: extractRecipeIngredients(hit.content),
