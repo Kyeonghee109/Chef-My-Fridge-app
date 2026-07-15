@@ -84,6 +84,11 @@ def _tokens(value: Any) -> dict[str, int]:
     return result
 
 
+def token_usage(value: Any) -> dict[str, int]:
+    """LLM 응답에서 입력·출력·전체 토큰 사용량을 추출합니다."""
+    return _tokens(value)
+
+
 def _format_node(node: TraceNode, depth: int = 0) -> str:
     indent = "  " * depth
     details = {
@@ -157,4 +162,4 @@ def trace(func: F) -> F:
     return cast(F, wrapper)
 
 
-__all__ = ["trace", "TraceNode"]
+__all__ = ["trace", "token_usage", "TraceNode"]

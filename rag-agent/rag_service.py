@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from recipe_loader import load_recipes
 from retriever import filter_candidates_by_cuisines, rank_candidates, select_diverse_candidates
-from trace_utils import trace
+from trace_utils import token_usage, trace
 
 
 EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -61,6 +61,21 @@ class RagService:
         """사용자 재료 목록을 벡터 검색용 자연어 질의로 변환합니다."""
         cuisine_text = f"{' '.join(cuisines or [])} 음식" if cuisines else ""
         return f"{' '.join(ingredients)} {cuisine_text}로 만들 수 있는 요리 레시피"
+
+    @trace
+    def my_service(self, prompt: str) -> dict[str, Any]:
+        """LLM을 호출하고 구조화된 응답과 토큰 사용량을 함께 반환합니다."""
+        structured = self.llm.with_structured_output(RecommendationResponse, include_raw=True)
+        result = structured.invoke(prompt)
+        raw = result.get("raw") if isinstance(result, dict) else None
+        response = result.get("parsed") if isinstance(result, dict) else result
+        parsing_error = result.get("parsing_error") if isinstance(result, dict) else None
+        if parsing_error:
+            raise ValueError(f"LLM 구조화 응답 파싱 실패: {parsing_error}")
+        return {
+            "response": response,
+            "usage": token_usage(raw),
+        }
 
     @trace
     def recommend(self, ingredients: list[str], top_k: int, cuisines: list[str] | None = None) -> list[Recommendation]:
@@ -120,8 +135,8 @@ class RagService:
 - 각 후보의 matched_ingredients와 missing_ingredients를 그대로 반영하세요.
 - recipe_title, matched_ingredients, missing_ingredients, reason 필드만 반환하세요.
 """
-        structured = self.llm.with_structured_output(RecommendationResponse)
-        response = structured.invoke(prompt)
+        llm_result = self.my_service(prompt)
+        response = llm_result["response"]
 
         # Claude가 누락하거나 중복해서 반환한 항목을 제거하고 검색 결과 순서로 부족한 수를 보충합니다.
         reason_by_title = {recommendation.recipe_title: recommendation.reason for recommendation in response.recommendations}
