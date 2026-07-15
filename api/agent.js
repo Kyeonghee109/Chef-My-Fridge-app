@@ -744,15 +744,6 @@ module.exports = async function handler(req, res) {
         console.error('Relaxed candidate search failed:', error.message);
       }
     }
-    // 검색 문서의 재료 메타데이터가 불완전해 엄격 검증에 통과하지 못해도,
-    // OpenAI가 완전한 메뉴 객체를 반환했다면 첫 추천을 실패시키지 않습니다.
-    for (const generated of generatedMenus.map(menu => usableGeneratedMenu(menu, body.ingredients)).filter(Boolean)) {
-      if (menus.length >= 3) break;
-      if (seenNames.has(normalizedMenuName(generated.name)) || exclude.some(name => normalizedMenuName(name) === normalizedMenuName(generated.name))) continue;
-      menus.push(generated);
-      seenNames.add(normalizedMenuName(generated.name));
-    }
-
     // 시간 필터를 지정하지 않은 경우에만 후보군을 넓혀 조리시간 다양성을 보정합니다.
     if (!filters.time && menus.length >= 1) {
       const timeDiversityCandidates = [...menus];
