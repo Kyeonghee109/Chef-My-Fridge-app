@@ -3,7 +3,18 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
+    "import:mfds": "node scripts/import-mfds-recipes.mjs",
     "eval": "node scripts/eval/run-eval.mjs",
-    "test:unit": "node --test scripts/eval/tests/*.test.mjs"
+    "test:unit": "node --test scripts/eval/tests/matching.test.mjs",
+    "test:recommend": "node --test scripts/eval/tests/alternate-recommendation.integration.test.mjs",
+    "snapshot": "node scripts/eval/snapshot-test.mjs",
+    "bug-injection": "node --test scripts/eval/tests/bug-injection.test.mjs",
+    "pass-at-3": "node scripts/eval/pass-at-k.mjs",
+    "latency": "node scripts/eval/latency-check.mjs",
+    "test:prompt-comparison": "node scripts/eval/prompt-comparison.mjs",
+    "test:all": "npm run test:unit && npm run bug-injection && npm run snapshot && npm run pass-at-3 && npm run latency && npm run eval"
+  },
+  "dependencies": {
+    "@langfuse/client": "5.9.1"
   }
 }
