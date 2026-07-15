@@ -14,6 +14,8 @@
     button { cursor:pointer; }
     .app { width:min(1120px,calc(100% - 32px)); margin:0 auto; padding:28px 0 56px; }
     header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:48px; }
+    .header-actions { display:flex; align-items:center; gap:4px; }
+    .favorites-button { color:var(--green); }
     .brand { color:var(--green); font-size:1.1rem; font-weight:850; letter-spacing:-.03em; }
     .brand span { display:inline-block; margin-right:8px; transform:rotate(-12deg); }
     .eyebrow { margin:0 0 12px; color:var(--green); font-size:.78rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
@@ -91,6 +93,8 @@
     .heart-button { display:inline-grid; place-items:center; width:32px; height:32px; padding:0; border:1px solid var(--line); border-radius:50%; color:var(--muted); background:transparent; font-size:1.25rem; line-height:1; transition:color .15s ease-out,background-color .15s ease-out,transform .15s ease-out; }
     .heart-button:hover, .heart-button:focus-visible { color:var(--green); background:var(--mint); transform:scale(1.03); outline:none; }
     .heart-button.is-liked { border-color:#46645642; color:var(--green); background:var(--mint); }
+    .detail-actions { display:flex; flex-wrap:wrap; gap:8px; }
+    .detail-favorite.is-liked { color:var(--green); background:var(--mint); }
     .menu-card p { flex:1; color:var(--muted); }
     .menu-card .menu-category { flex:0 0 auto; }
     .meta { display:flex; flex-wrap:wrap; gap:7px; margin:14px 0; }
@@ -134,12 +138,22 @@
     .native-filter { position:absolute; width:1px; height:1px; overflow:hidden; opacity:0; pointer-events:none; }
     .field label { display:block; margin-bottom:7px; color:var(--muted); font-size:.82rem; font-weight:700; }
     footer { margin-top:22px; color:var(--muted); font-size:.8rem; text-align:center; }
+    .favorites-overlay[hidden] { display:none; }
+    .favorites-overlay { position:fixed; inset:0; z-index:50; display:grid; place-items:center; padding:20px; background:#292a2733; }
+    .favorites-panel { width:min(520px,100%); max-height:min(680px,calc(100vh - 40px)); overflow:auto; padding:24px; border:1px solid var(--line); border-radius:18px; background:var(--paper); box-shadow:0 18px 50px #292a2726; }
+    .favorites-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:18px; }
+    .favorites-head h2 { font-size:1.5rem; }
+    .favorite-list { display:grid; gap:10px; }
+    .favorite-item { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px; border:1px solid var(--line); border-radius:12px; background:var(--cream); }
+    .favorite-open { flex:1; padding:0; border:0; color:var(--ink); background:transparent; font:inherit; font-weight:600; text-align:left; }
+    .favorite-remove { flex:0 0 auto; border:0; color:var(--green); background:transparent; font:inherit; }
+    .favorite-empty { margin:0; padding:28px 0; color:var(--muted); text-align:center; }
     @media (max-width:760px) { .app { width:min(100% - 22px,560px); padding-top:18px; } header { margin-bottom:32px; } h1 { font-size:2rem; } h2 { font-size:1.8rem; } .hero, .detail-layout { grid-template-columns:1fr; gap:22px; } .hero-mark { min-height:280px; } .hero-copy { padding:24px 16px; } .hero-copy > p:last-child { white-space:normal; } .status-text { font-size:1rem; } .status-ingredient-line { font-size:1.15rem; } .panel { padding:20px; border-radius:22px; } .card-grid, .filters { grid-template-columns:1fr; } .results-head, .panel-head { align-items:start; flex-direction:column; } .custom-form { flex-direction:column; } }
   </style>
 </head>
 <body>
   <main class="app">
-    <header><div class="brand"><span>🥬</span>냉장고파먹기</div><button class="button ghost" id="resetTop">처음으로</button></header>
+    <header><div class="brand"><span>🥬</span>냉장고파먹기</div><div class="header-actions"><button class="button ghost favorites-button" id="favoritesButton" type="button">♡ 즐겨 찾는 메뉴</button><button class="button ghost" id="resetTop" type="button">처음으로</button></div></header>
 
     <section class="hero">
       <div class="hero-mark" id="heroMark">
@@ -178,14 +192,15 @@
     </section>
 
     <section class="screen" id="detailScreen" hidden>
-      <div class="detail-layout"><aside class="detail-intro"><p class="eyebrow">03 / Recipe</p><h2 id="detailName"></h2><p id="detailDescription"></p><div class="meta" id="detailMeta"></div><button class="button secondary" id="detailBack">← 추천 목록</button></aside><article class="panel"><div class="detail-section"><h3>필요한 재료</h3><ul class="ingredient-list" id="detailIngredients"></ul><p class="missing-ingredients" id="missingIngredients" hidden></p></div><div class="detail-section"><h3>만드는 순서</h3><ol class="recipe-list" id="detailRecipe"></ol></div><p class="disclaimer">레시피는 AI가 생성한 참고 정보입니다. 알레르기와 식재료 상태를 직접 확인한 후 조리하세요.</p></article></div>
+      <div class="detail-layout"><aside class="detail-intro"><p class="eyebrow">03 / Recipe</p><h2 id="detailName"></h2><p id="detailDescription"></p><div class="meta" id="detailMeta"></div><div class="detail-actions"><button class="button secondary detail-favorite" id="detailFavoriteButton" type="button">♡ 즐겨찾기</button><button class="button secondary" id="detailBack" type="button">← 추천 목록</button></div></aside><article class="panel"><div class="detail-section"><h3>필요한 재료</h3><ul class="ingredient-list" id="detailIngredients"></ul><p class="missing-ingredients" id="missingIngredients" hidden></p></div><div class="detail-section"><h3>만드는 순서</h3><ol class="recipe-list" id="detailRecipe"></ol></div><p class="disclaimer">레시피는 AI가 생성한 참고 정보입니다. 알레르기와 식재료 상태를 직접 확인한 후 조리하세요.</p></article></div>
     </section>
     <footer>현재 선택과 추천 결과는 이 브라우저 세션에서만 유지됩니다.</footer>
   </main>
+  <div class="favorites-overlay" id="favoritesOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="favoritesTitle"><section class="favorites-panel"><div class="favorites-head"><h2 id="favoritesTitle">즐겨 찾는 메뉴</h2><button class="button ghost" id="favoritesClose" type="button" aria-label="즐겨찾기 닫기">×</button></div><div class="favorite-list" id="favoritesList"></div></section></div>
   <script>
     const INGREDIENTS = ['계란','두부','닭가슴살','돼지고기','소고기','참치캔','햄','베이컨','김치','양파','대파','마늘','감자','당근','애호박','버섯','시금치','브로콜리','토마토','양배추','오이','고추','밥','파스타면','우유','치즈','밀가루','간장','고추장','참기름','어묵','떡','연어','새우','우동면'];
     const CUISINES = ['한식','중식','양식','일식','분식'];
-    const state = { screen:'ingredients', selectedIngredients:[], selectedCuisines:[], menus:[], currentMenu:null, previousMenuNames:[], loading:false, error:'', controller:null };
+    const state = { screen:'ingredients', selectedIngredients:[], selectedCuisines:[], menus:[], currentMenu:null, previousMenuNames:[], loading:false, error:'', controller:null, favoriteIds:[], favoriteDetails:{} };
     const $ = (selector) => document.querySelector(selector);
     const screens = { ingredients:$('#ingredientsScreen'), results:$('#resultsScreen'), detail:$('#detailScreen') };
     const hero = $('.hero');
@@ -207,6 +222,21 @@
     const text = (value) => document.createTextNode(String(value ?? ''));
     const el = (tag, className, content) => { const node=document.createElement(tag); if(className) node.className=className; if(content !== undefined) node.append(text(content)); return node; };
     const normalized = (value) => String(value??'').trim().replace(/\([^)]*\)/g,'').replace(/(?:\d+(?:[./]\d+)?|[½¼¾])\s*(?:kg|g|mg|ml|l|개|알|장|봉|팩|캔|컵|큰술|작은술|스푼|쪽|대|줄|마리|근|인분)/gi,'').replace(/약간|적당량|한줌|한 줌/g,'').replace(/\s+/g,' ').toLocaleLowerCase('ko-KR');
+    const FAVORITES_KEY='favoriteRecipes';
+    const FAVORITE_DETAILS_KEY='favoriteRecipeDetails';
+    function readStorage(key,fallback) { if(typeof window==='undefined') return fallback; try { const value=window.localStorage.getItem(key); return value?JSON.parse(value):fallback; } catch { return fallback; } }
+    function saveFavorites() { if(typeof window==='undefined') return; try { window.localStorage.setItem(FAVORITES_KEY,JSON.stringify(state.favoriteIds)); window.localStorage.setItem(FAVORITE_DETAILS_KEY,JSON.stringify(state.favoriteDetails)); } catch {} }
+    state.favoriteIds=(Array.isArray(readStorage(FAVORITES_KEY,[]))?readStorage(FAVORITES_KEY,[]):[]).filter(id=>typeof id==='string');
+    const storedDetails=readStorage(FAVORITE_DETAILS_KEY,{});
+    state.favoriteDetails=storedDetails&&typeof storedDetails==='object'&&!Array.isArray(storedDetails)?storedDetails:{};
+    function recipeId(menu) { return String(menu.id||`${menu.name||''}:${menu.cookTime||''}`).trim(); }
+    function isFavorite(menu) { return state.favoriteIds.includes(recipeId(menu)); }
+    function syncFavoriteButton(button,menu,detail=false) { const liked=isFavorite(menu); button.classList.toggle('is-liked',liked); button.setAttribute('aria-pressed',String(liked)); button.textContent=detail?(liked?'♥ 즐겨찾기':'♡ 즐겨찾기'):(liked?'♥':'♡'); }
+    function bindFavoriteButton(button,menu,detail=false) { button.dataset.favoriteId=recipeId(menu); button.dataset.favoriteDetail=String(detail); syncFavoriteButton(button,menu,detail); button.onclick=event=>{ event.preventDefault(); toggleFavorite(menu); }; }
+    function toggleFavorite(menu) { const id=recipeId(menu); if(!id) return; if(state.favoriteIds.includes(id)){ state.favoriteIds=state.favoriteIds.filter(value=>value!==id); delete state.favoriteDetails[id]; } else { state.favoriteIds=[...state.favoriteIds,id]; state.favoriteDetails[id]=menu; } saveFavorites(); document.querySelectorAll('[data-favorite-id]').forEach(button=>{ if(button.dataset.favoriteId===id) syncFavoriteButton(button,menu,button.dataset.favoriteDetail==='true'); }); renderFavorites(); }
+    function openFavorites() { renderFavorites(); $('#favoritesOverlay').hidden=false; $('#favoritesClose').focus(); }
+    function closeFavorites() { $('#favoritesOverlay').hidden=true; }
+    function renderFavorites() { const list=$('#favoritesList'); list.replaceChildren(); const favorites=state.favoriteIds.map(id=>state.favoriteDetails[id]).filter(menu=>menu&&menu.name); if(!favorites.length){ list.append(el('p','favorite-empty','즐겨찾는 메뉴가 아직 없어요.')); return; } favorites.forEach(menu=>{ const item=el('div','favorite-item'); const open=el('button','favorite-open',menu.name); open.type='button'; open.addEventListener('click',()=>{ closeFavorites(); showDetail(menu); }); const remove=el('button','favorite-remove','삭제'); remove.type='button'; remove.addEventListener('click',()=>toggleFavorite(menu)); item.append(open,remove); list.append(item); }); }
 
     function showScreen(screen) { state.screen=screen; if(screen!=='ingredients') heroDismissed=true; hero.hidden=heroDismissed; Object.entries(screens).forEach(([name,node]) => { node.hidden=name!==screen; }); window.scrollTo({top:0,behavior:'smooth'}); }
     const conveyorFoods=['🥬','🥕','🍅','🥚','🧅','🍄','🍤','🥩','🥦','🌽','🧀','🍝','🫑','🥔','🍗','🥒','🌶️','🍚','🧄','🍋','🥓','🍆','🍠'];
@@ -240,14 +270,18 @@
     async function requestMenus() { const requestScreen=state.screen; const errorTarget=requestScreen==='results'?'#resultError':'#ingredientError'; if(!state.selectedIngredients.length){ setError('재료를 하나 이상 선택해주세요.',errorTarget); return; } cancelRequest(); const controller=new AbortController(); state.controller=controller; state.loading=true; setError(); setStatus(requestScreen==='results'?'다른 메뉴를 찾고 있어요...':'오늘 만들 수 있는 메뉴를 찾고 있어요...'); $('#recommendButton').disabled=true; $('#anotherButton').disabled=true; try { const response=await fetch('/api/agent',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ingredients:state.selectedIngredients,cuisines:state.selectedCuisines,filters:currentFilters(),exclude:state.previousMenuNames}),signal:controller.signal}); const payload=await response.json().catch(()=>({})); if(!response.ok) throw new Error(payload.message||payload.error||`추천 요청 실패 (${response.status})`); if(controller.signal.aborted || state.controller!==controller) return; state.menus=validateMenus(payload.menus); state.currentMenu=state.menus[0]; state.previousMenuNames.push(...state.menus.map(menu=>menu.name)); setError(); renderResults(); showScreen('results'); } catch(error) { if(error.name!=='AbortError' && !controller.signal.aborted){ setStatus(''); setError(error.message||'추천을 불러오지 못했습니다.',errorTarget); } } finally { if(state.controller===controller) { state.controller=null; state.loading=false; setStatus(''); $('#recommendButton').disabled=false; $('#anotherButton').disabled=false; } } }
     function difficultyClass(value) { return value==='쉬움'?'meta-easy':value==='보통'?'meta-normal':'meta-hard'; }
     function difficultyBadge(value) { const badge=el('span',`meta-difficulty ${difficultyClass(value)}`); const icon=el('i','difficulty-icon'); [1,2,3].forEach(()=>icon.append(el('b'))); badge.append(icon,text(`난이도 ${value}`)); return badge; }
-    function renderResults() { $('#resultSummary').textContent=`${state.selectedIngredients.join(', ')} 재료로 만들 수 있는 메뉴`; const grid=$('#menuGrid'); grid.replaceChildren(); state.menus.forEach(menu=>{ const card=el('article','menu-card'); const cuisine=Array.isArray(menu.cuisine)?menu.cuisine.find(Boolean):''; const topLine=el('div','card-topline'); if(cuisine) topLine.append(el('p','menu-category',cuisine)); const heart=el('button','heart-button','♡'); heart.type='button'; heart.setAttribute('aria-label',`${menu.name} 즐겨찾기`); heart.setAttribute('aria-pressed','false'); heart.addEventListener('click',event=>{ event.preventDefault(); const liked=heart.classList.toggle('is-liked'); heart.textContent=liked?'♥':'♡'; heart.setAttribute('aria-pressed',String(liked)); }); topLine.append(heart); card.append(topLine); card.append(el('h3','',menu.name)); card.append(el('p','',menu.description)); const meta=el('div','meta'); meta.append(el('span','meta-time',`🕒 ${menu.cookTime}`),difficultyBadge(menu.difficulty)); card.append(meta); const button=el('button','button','레시피 보기 →'); button.type='button'; button.addEventListener('click',event=>{ event.preventDefault(); showDetail(menu); }); card.append(button); grid.append(card); }); }
-    function showDetail(menu) { state.currentMenu=menu; $('#detailName').textContent=menu.name; $('#detailDescription').textContent=menu.description; const meta=$('#detailMeta'); meta.replaceChildren(el('span','meta-time',`🕒 ${menu.cookTime}`),difficultyBadge(menu.difficulty)); const allIngredients=Array.isArray(menu.ingredients)&&menu.ingredients.length?menu.ingredients.filter(Boolean):state.selectedIngredients; const selected=new Set(state.selectedIngredients.map(normalized)); const declaredMissing=Array.isArray(menu.missingIngredients)?menu.missingIngredients.filter(Boolean):[]; const missingIngredients=declaredMissing.concat(allIngredients.filter(item=>!selected.has(normalized(item))&&!declaredMissing.some(missing=>normalized(missing)===normalized(item)))); const ingredients=$('#detailIngredients'); ingredients.replaceChildren(); allIngredients.forEach(item=>ingredients.append(el('li','',item))); const missingText=$('#missingIngredients'); missingText.textContent=`추가로 필요한 재료: ${missingIngredients.length?missingIngredients.join(', '):'없음'}`; missingText.hidden=false; const recipe=$('#detailRecipe'); recipe.replaceChildren(); menu.recipe.forEach(step=>recipe.append(el('li','',step))); showScreen('detail'); }
+    function renderResults() { $('#resultSummary').textContent=`${state.selectedIngredients.join(', ')} 재료로 만들 수 있는 메뉴`; const grid=$('#menuGrid'); grid.replaceChildren(); state.menus.forEach(menu=>{ const card=el('article','menu-card'); const cuisine=Array.isArray(menu.cuisine)?menu.cuisine.find(Boolean):''; const topLine=el('div','card-topline'); if(cuisine) topLine.append(el('p','menu-category',cuisine)); const heart=el('button','heart-button'); heart.type='button'; heart.setAttribute('aria-label',`${menu.name} 즐겨찾기`); bindFavoriteButton(heart,menu); topLine.append(heart); card.append(topLine); card.append(el('h3','',menu.name)); card.append(el('p','',menu.description)); const meta=el('div','meta'); meta.append(el('span','meta-time',`🕒 ${menu.cookTime}`),difficultyBadge(menu.difficulty)); card.append(meta); const button=el('button','button','레시피 보기 →'); button.type='button'; button.addEventListener('click',event=>{ event.preventDefault(); showDetail(menu); }); card.append(button); grid.append(card); }); }
+    function showDetail(menu) { state.currentMenu=menu; $('#detailName').textContent=menu.name; $('#detailDescription').textContent=menu.description; const meta=$('#detailMeta'); meta.replaceChildren(el('span','meta-time',`🕒 ${menu.cookTime}`),difficultyBadge(menu.difficulty)); bindFavoriteButton($('#detailFavoriteButton'),menu,true); const allIngredients=Array.isArray(menu.ingredients)&&menu.ingredients.length?menu.ingredients.filter(Boolean):state.selectedIngredients; const selected=new Set(state.selectedIngredients.map(normalized)); const declaredMissing=Array.isArray(menu.missingIngredients)?menu.missingIngredients.filter(Boolean):[]; const missingIngredients=declaredMissing.concat(allIngredients.filter(item=>!selected.has(normalized(item))&&!declaredMissing.some(missing=>normalized(missing)===normalized(item)))); const ingredients=$('#detailIngredients'); ingredients.replaceChildren(); allIngredients.forEach(item=>ingredients.append(el('li','',item))); const missingText=$('#missingIngredients'); missingText.textContent=`추가로 필요한 재료: ${missingIngredients.length?missingIngredients.join(', '):'없음'}`; missingText.hidden=false; const recipe=$('#detailRecipe'); recipe.replaceChildren(); menu.recipe.forEach(step=>recipe.append(el('li','',step))); showScreen('detail'); }
     function reset() { cancelRequest(); state.screen='ingredients'; state.selectedIngredients=[]; state.selectedCuisines=[]; state.menus=[]; state.currentMenu=null; state.previousMenuNames=[]; state.error=''; $('#customInput').value=''; $('#timeFilter').value=''; $('#difficultyFilter').value=''; $('#dietFilter').value=''; syncCustomSelects(); setError(); setStatus(''); renderIngredients(); showScreen('ingredients'); }
     $('#customForm').addEventListener('submit',event=>{ event.preventDefault(); addIngredients($('#customInput').value.split(',')); $('#customInput').value=''; });
     $('#recommendButton').addEventListener('click',requestMenus);
     $('#anotherButton').addEventListener('click',event=>{ event.preventDefault(); requestMenus(); });
     $('#backToIngredients').addEventListener('click',()=>{ cancelRequest(); setError(); showScreen('ingredients'); });
     $('#detailBack').addEventListener('click',()=>showScreen('results'));
+    $('#favoritesButton').addEventListener('click',openFavorites);
+    $('#favoritesClose').addEventListener('click',closeFavorites);
+    $('#favoritesOverlay').addEventListener('click',event=>{ if(event.target===$('#favoritesOverlay')) closeFavorites(); });
+    document.addEventListener('keydown',event=>{ if(event.key==='Escape'&&!$('#favoritesOverlay').hidden) closeFavorites(); });
     $('#resetTop').addEventListener('click',reset);
     renderIngredients();
   </script>
