@@ -259,9 +259,10 @@ function isPantryIngredient(value) {
   return PANTRY_INGREDIENTS.has(canonicalIngredient(value));
 }
 
-function missingCoreIngredients(ownedIngredients, requiredIngredients) {
+function missingCoreIngredients(ownedIngredients, requiredIngredients, explicitCoreKeys = []) {
   const owned = new Set((ownedIngredients || []).map(canonicalIngredient));
-  return (requiredIngredients || []).filter(item => {
+  const candidates = explicitCoreKeys.length ? explicitCoreKeys : (requiredIngredients || []).map(canonicalIngredient).filter(key => !isPantryIngredient(key));
+  return candidates.filter(item => {
     const key = canonicalIngredient(item);
     return key && !owned.has(key) && !isPantryIngredient(item);
   });
@@ -663,7 +664,7 @@ module.exports = async function handler(req, res) {
     // 벡터 유사도 후보를 재료 매칭 점수와 핵심 재료 우선순위로 재정렬합니다.
     const timeLimit = timeLimitMinutes(filters.time);
     const rankedHits = rankRecipeHits(body.ingredients, enrichedHits, 40)
-      .filter(hit => missingCoreIngredients(body.ingredients, hit.requiredIngredients).length === 0)
+      .filter(hit => missingCoreIngredients(body.ingredients, hit.requiredIngredients, hit.metadata?.core_ingredient_keys || []).length === 0)
       .filter(hit => isWithinTimeLimit(hit, timeLimit));
     if (!rankedHits.length) return res.status(404).json({ error: '보유한 핵심 재료와 시간 조건을 모두 만족하는 레시피를 찾지 못했습니다.' });
 

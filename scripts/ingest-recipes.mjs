@@ -20,11 +20,19 @@ const formatIngredient = ingredient => {
   }
   return String(ingredient ?? '');
 };
+const ingredientKey = ingredient => String(ingredient?.ingredient_key || ingredient?.name || ingredient || '')
+  .toLocaleLowerCase('ko-KR')
+  .replace(/\([^)]*\)/g, '')
+  .replace(/(?:\d+(?:[./]\d+)?|[½¼¾])\s*(?:kg|g|mg|ml|l|개|알|장|봉|팩|캔|컵|공기|큰술|작은술|스푼|쪽|대|줄|마리|근|인분|줌)/gi, '')
+  .replace(/[\s.,。/·]+/g, '');
 const recipes = rawRecipes.map(recipe => ({
   id: String(recipe.id || recipe.name || recipe.title),
   name: recipe.name || recipe.title,
   cuisine: Array.isArray(recipe.cuisine) ? recipe.cuisine : [],
   source: recipe.source || null,
+  ingredientKeys: (recipe.ingredients || []).map(ingredientKey).filter(Boolean),
+  coreIngredientKeys: (recipe.ingredients || []).filter(ingredient => ingredient?.is_core === true).map(ingredientKey).filter(Boolean),
+  pantryIngredientKeys: (recipe.ingredients || []).filter(ingredient => ingredient?.pantry_item === true).map(ingredientKey).filter(Boolean),
   text: recipe.text || [
     recipe.title,
     `설명: ${recipe.description || ''}`,
@@ -54,7 +62,10 @@ const chunks = recipes.flatMap(recipe => {
         source_recipe_id: recipe.source?.recipe_id || null,
         recipe_id: recipe.id,
         chunk_index: chunkIndex,
-        cuisine: recipe.cuisine
+        cuisine: recipe.cuisine,
+        ingredient_keys: recipe.ingredientKeys,
+        core_ingredient_keys: recipe.coreIngredientKeys,
+        pantry_ingredient_keys: recipe.pantryIngredientKeys
       }
     });
     chunkIndex += 1;
