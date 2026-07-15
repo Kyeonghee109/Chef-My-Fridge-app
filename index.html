@@ -8,6 +8,7 @@
     @font-face { font-family:GmarketSansMedium; font-style:normal; font-weight:500; font-display:swap; src:local('GmarketSansMedium'),url('file:///Users/parkseeun/Library/Fonts/GmarketSansMedium.otf#postscript-name=GmarketSansMedium') format('opentype'); }
     :root { --ink:#292a27; --muted:#777873; --cream:#f4f4f2; --paper:#fbfaf7; --green:#466456; --mint:#e5eee8; --yellow:#d9b968; --line:#e1e1dd; --danger:#a54b44; }
     * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
     body { margin:0; color:var(--ink); background:radial-gradient(circle at top left,#fafaf8 0%,#f4f4f2 58%,#f3f3f1 100%); font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
     body::before { content:""; position:fixed; inset:0; z-index:10; pointer-events:none; opacity:.035; mix-blend-mode:multiply; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E"); }
     button, input, select { font:inherit; }
@@ -25,7 +26,7 @@
     .heading-highlight { padding:0 .08em; border-radius:10px; background:linear-gradient(to bottom,transparent 58%,#dcebe1 58%,#dcebe1 88%,transparent 88%); box-decoration-break:clone; -webkit-box-decoration-break:clone; }
     h3 { margin:0; font-size:1.2rem; letter-spacing:-.035em; }
     p { line-height:1.7; }
-    .hero { position:relative; display:flex; align-items:center; justify-content:center; width:100vw; min-height:100vh; margin:0 0 0 calc(50% - 50vw); padding:48px 16px; overflow:hidden; background:var(--cream) url("assets/hero-ingredient-pattern.png") center/cover no-repeat; opacity:var(--hero-opacity,1); transform:translateY(var(--hero-y,0px)) scale(var(--hero-scale,1)); transform-origin:center top; will-change:opacity,transform; }
+    .hero { position:relative; display:flex; align-items:center; justify-content:center; width:100vw; min-height:clamp(520px,calc(100vh - 237px),720px); margin:0 0 0 calc(50% - 50vw); padding:48px 16px; overflow:hidden; background:var(--cream) url("assets/hero-ingredient-pattern.png") center/cover no-repeat; opacity:var(--hero-opacity,1); transform:translateY(var(--hero-y,0px)) scale(var(--hero-scale,1)); transform-origin:center top; will-change:opacity,transform; }
     .hero[hidden] { display:none; }
     .hero-mark { position:relative; display:grid; place-items:center; width:min(100%,960px); min-height:420px; margin:0 auto; overflow:hidden; isolation:isolate; background:transparent; }
     .hero-mark::before { content:""; position:absolute; z-index:1; width:min(84%,840px); aspect-ratio:2.35; border-radius:50%; pointer-events:none; background:radial-gradient(ellipse at center,rgba(244,244,242,.82) 0%,rgba(244,244,242,.42) 46%,rgba(244,244,242,0) 74%); }
@@ -158,7 +159,7 @@
     .favorite-list { display:flex; gap:16px; overflow-x:auto; padding:4px 2px 14px; scroll-snap-type:x mandatory; scroll-behavior:smooth; -webkit-overflow-scrolling:touch; }
     .favorite-list .menu-card { flex:0 0 280px; width:280px; scroll-snap-align:start; }
     .favorite-empty { flex:1; margin:0; padding:28px 0; color:var(--muted); text-align:center; }
-    .how-to { padding:72px 0 82px; background:var(--paper); }
+    .how-to { padding:32px 0 82px; background:var(--paper); }
     .how-to h2 { margin-bottom:38px; color:var(--ink); text-align:center; }
     .how-to-list { display:grid; grid-template-columns:repeat(3,1fr); gap:48px; width:min(960px,100%); margin:0 auto; }
     .how-step { position:relative; display:grid; grid-template-columns:72px 1fr; gap:16px; align-items:center; }
