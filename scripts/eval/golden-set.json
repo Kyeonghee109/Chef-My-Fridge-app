@@ -1,0 +1,42 @@
+[
+  {
+    "input": { "ingredients": ["계란", "양파", "감자"], "cuisines": [] },
+    "criteria": "top-3 안에 계란, 양파, 감자 중 2개 이상을 활용하는 레시피가 최소 1개 포함되어야 한다."
+  },
+  {
+    "input": { "ingredients": ["새우", "양파", "대파"], "cuisines": ["중식"] },
+    "criteria": "추천된 3개 레시피가 모두 중식 cuisine을 가져야 한다."
+  },
+  {
+    "input": { "ingredients": ["파스타면", "토마토", "버섯"], "cuisines": ["양식"] },
+    "criteria": "추천된 3개 레시피가 모두 양식이고 파스타면 또는 버섯을 활용해야 한다."
+  },
+  {
+    "input": { "ingredients": ["계란", "양배추", "대파"], "cuisines": ["일식"] },
+    "criteria": "추천된 3개 레시피가 일식이며 계란, 양배추, 대파 중 하나 이상을 활용해야 한다."
+  },
+  {
+    "input": { "ingredients": ["떡", "어묵", "대파"], "cuisines": ["분식"] },
+    "criteria": "추천된 3개 레시피가 분식이며 떡 또는 어묵을 활용하는 메뉴여야 한다."
+  },
+  {
+    "input": { "ingredients": ["닭가슴살", "브로콜리", "당근"], "cuisines": [], "filters": { "time": "30분 이내", "difficulty": "쉬움" } },
+    "criteria": "3개 메뉴를 반환하고, 닭가슴살·브로콜리·당근 중 하나 이상을 활용하며 30분 이내와 쉬움 조건을 최대한 반영해야 한다."
+  },
+  {
+    "input": { "ingredients": ["참기름", "우유"], "cuisines": [] },
+    "criteria": "참기름 또는 우유와 실제로 관련된 재료를 활용하는 메뉴를 우선 추천하고, 관련성이 낮은 메뉴만으로 채우지 않아야 한다."
+  },
+  {
+    "input": { "ingredients": ["연어"], "cuisines": ["일식"] },
+    "criteria": "연어를 활용하는 일식 메뉴가 top-3에 포함되어야 하며 부족한 재료는 missing_ingredients에 표시해야 한다."
+  },
+  {
+    "input": { "ingredients": ["초콜릿", "바나나"], "cuisines": ["중식"] },
+    "criteria": "선택한 카테고리와 재료 조합이 어려워도 오류로 죽지 않고 3개 메뉴 또는 이해 가능한 안내 결과를 반환해야 한다."
+  },
+  {
+    "input": { "ingredients": [], "cuisines": [] },
+    "criteria": "재료가 없을 때 서버 오류로 죽지 않고 재료를 입력하라는 안내 메시지를 반환해야 한다."
+  }
+]
