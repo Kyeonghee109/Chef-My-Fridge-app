@@ -302,8 +302,21 @@ function extractRecipeSteps(content) {
   return match[1]
     .replace(/(?:^|\s)\d+\s*[.)]\s*/g, '\n')
     .split(/\n+/)
-    .map(step => step.trim().replace(/^[-•]\s*/, '').replace(/^[.。\s]+|[.。\s]+$/g, ''))
+    .flatMap(splitRecipeStepText)
     .filter(step => step && !RECIPE_METADATA_LINE.test(step));
+}
+
+// 한 항목에 여러 문장이 들어온 구버전/LLM 응답도 화면에서 동작 단위별로 나눕니다.
+function splitRecipeStepText(value) {
+  const text = String(value || '')
+    .trim()
+    .replace(/^[-•]\s*/, '')
+    .replace(/^[.。\s]+|[.。\s]+$/g, '');
+  if (!text) return [];
+  return text
+    .split(/(?<=[.!?。])\s+/)
+    .map(step => step.trim().replace(/^[-•]\s*/, '').replace(/^[.。\s]+|[.。\s]+$/g, ''))
+    .filter(Boolean);
 }
 
 function cleanRecipeSteps(recipe) {
@@ -312,7 +325,7 @@ function cleanRecipeSteps(recipe) {
     const step = String(value || '').trim();
     if (!step) return [];
     const structuredSteps = step.includes('조리 순서') ? extractRecipeSteps(step) : [];
-    return structuredSteps.length ? structuredSteps : [step];
+    return structuredSteps.length ? structuredSteps : splitRecipeStepText(step);
   }).filter(step => !RECIPE_METADATA_LINE.test(step));
 }
 
