@@ -21,12 +21,12 @@
     .brand span { display:inline-block; margin-right:8px; transform:rotate(-12deg); }
     .eyebrow { margin:0 0 12px; color:var(--green); font-size:.78rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
     h1 { max-width:760px; margin:0; font-size:clamp(1rem,4.3vw,2.15rem); line-height:1.2; font-weight:500; letter-spacing:-.05em; white-space:nowrap; font-family:GmarketSansMedium,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    .mobile-title-line { display:inline; }
+    .mobile-title-line { display:block; }
     h2 { margin:0; font-size:2.2rem; letter-spacing:-.06em; }
     .heading-highlight { padding:0 .08em; border-radius:10px; background:linear-gradient(to bottom,transparent 58%,#dcebe1 58%,#dcebe1 88%,transparent 88%); box-decoration-break:clone; -webkit-box-decoration-break:clone; }
     h3 { margin:0; font-size:1.2rem; letter-spacing:-.035em; }
     p { line-height:1.7; }
-    .hero { position:relative; display:flex; align-items:center; justify-content:center; width:100vw; min-height:clamp(520px,calc(100vh - 237px),720px); margin:0 0 0 calc(50% - 50vw); padding:48px 16px; overflow:hidden; background:var(--cream) url("assets/hero-ingredient-pattern.png") center/cover no-repeat; opacity:var(--hero-opacity,1); transform:translateY(var(--hero-y,0px)) scale(var(--hero-scale,1)); transform-origin:center top; will-change:opacity,transform; }
+    .hero { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; width:100vw; min-height:clamp(520px,calc(100vh - 237px),720px); margin:0 0 0 calc(50% - 50vw); padding:48px 16px; overflow:hidden; background:var(--cream) url("assets/hero-ingredient-pattern.png") center/cover no-repeat; opacity:var(--hero-opacity,1); transform:translateY(var(--hero-y,0px)) scale(var(--hero-scale,1)); transform-origin:center top; will-change:opacity,transform; }
     .hero[hidden] { display:none; }
     .hero-mark { position:relative; display:grid; place-items:center; width:min(100%,960px); min-height:420px; margin:0 auto; overflow:hidden; isolation:isolate; background:transparent; }
     .hero-mark::before { content:""; position:absolute; z-index:1; width:min(84%,840px); aspect-ratio:2.35; border-radius:50%; pointer-events:none; background:radial-gradient(ellipse at center,rgba(244,244,242,.82) 0%,rgba(244,244,242,.42) 46%,rgba(244,244,242,0) 74%); }
@@ -159,7 +159,7 @@
     .favorite-list { display:flex; gap:16px; overflow-x:auto; padding:4px 2px 14px; scroll-snap-type:x mandatory; scroll-behavior:smooth; -webkit-overflow-scrolling:touch; }
     .favorite-list .menu-card { flex:0 0 280px; width:280px; scroll-snap-align:start; }
     .favorite-empty { flex:1; margin:0; padding:28px 0; color:var(--muted); text-align:center; }
-    .how-to { padding:32px 0 82px; background:var(--paper); }
+    .how-to { width:100%; padding:32px 0 82px; background:var(--paper); }
     .how-to h2 { margin-bottom:38px; color:var(--ink); text-align:center; }
     .how-to-list { display:grid; grid-template-columns:repeat(3,1fr); gap:48px; width:min(960px,100%); margin:0 auto; }
     .how-step { position:relative; display:grid; grid-template-columns:72px 1fr; gap:16px; align-items:center; }
@@ -187,15 +187,14 @@
         <span class="hero-food" data-depth="0.6" style="--left:32%;--top:82%;--size:2.5rem;--duration:5.5s;--delay:.6s;--entrance:.85s" aria-hidden="true"><span class="hero-food-glyph float-egg">🍳</span></span>
         <span class="hero-food" data-depth="0.4" style="--left:4%;--top:72%;--size:2.2rem;--duration:7.4s;--delay:.3s;--entrance:1s" aria-hidden="true"><span class="hero-food-glyph float-salad">🥗</span></span>
       </div>
-    </section>
-
-    <section class="how-to" aria-labelledby="howToTitle">
-      <h2 id="howToTitle">이렇게 사용해보세요!</h2>
-      <div class="how-to-list">
-        <article class="how-step"><span class="how-icon" aria-hidden="true">🥕</span><span class="how-badge">1</span><div><h3>재료를 선택해요</h3><p>냉장고 속 재료를<br>자유롭게 골라주세요.</p></div></article>
-        <article class="how-step"><span class="how-icon" aria-hidden="true">👩‍🍳</span><span class="how-badge">2</span><div><h3>AI가 메뉴를 추천해요</h3><p>선택한 재료로 만들 수 있는<br>메뉴를 추천해드려요.</p></div></article>
-        <article class="how-step"><span class="how-icon" aria-hidden="true">🍳</span><span class="how-badge">3</span><div><h3>레시피를 확인해요</h3><p>맛있는 레시피를 보고<br>요리를 시작해보세요!</p></div></article>
-      </div>
+      <section class="how-to" aria-labelledby="howToTitle">
+        <h2 id="howToTitle">이렇게 사용해보세요!</h2>
+        <div class="how-to-list">
+          <article class="how-step"><span class="how-icon" aria-hidden="true">🥕</span><span class="how-badge">1</span><div><h3>재료를 선택해요</h3><p>냉장고 속 재료를<br>자유롭게 골라주세요.</p></div></article>
+          <article class="how-step"><span class="how-icon" aria-hidden="true">👩‍🍳</span><span class="how-badge">2</span><div><h3>AI가 메뉴를 추천해요</h3><p>선택한 재료로 만들 수 있는<br>메뉴를 추천해드려요.</p></div></article>
+          <article class="how-step"><span class="how-icon" aria-hidden="true">🍳</span><span class="how-badge">3</span><div><h3>레시피를 확인해요</h3><p>맛있는 레시피를 보고<br>요리를 시작해보세요!</p></div></article>
+        </div>
+      </section>
     </section>
 
     <section class="screen story-selection" id="ingredientsScreen">
