@@ -1,5 +1,5 @@
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
-const { calculateMissingIngredients: calculateMissingIngredientsPure, filterByCuisine: filterRecipesByCuisine } = require('./retrieval');
+const { filterByCuisine: filterRecipesByCuisine } = require('./retrieval');
 const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-5.6-terra';
 const CUISINES = ['한식', '중식', '양식', '일식'];
 const INGREDIENT_ALIASES = {
@@ -225,7 +225,14 @@ function resolveCookTime(value, content, recipe = []) {
 
 // 사용자가 고른 재료를 기준으로 레시피의 부족 재료를 서버에서 확정합니다.
 function calculateMissingIngredients(ownedIngredients, requiredIngredients) {
-  return calculateMissingIngredientsPure(ownedIngredients, requiredIngredients);
+  const owned = new Set((Array.isArray(ownedIngredients) ? ownedIngredients : []).map(canonicalIngredient).filter(Boolean));
+  const seen = new Set();
+  return (Array.isArray(requiredIngredients) ? requiredIngredients : []).filter(item => {
+    const key = canonicalIngredient(item);
+    if (!key || owned.has(key) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function sameIngredientList(left, right) {
