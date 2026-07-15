@@ -32,7 +32,38 @@ def test_zero_match_candidates_are_filtered() -> None:
         [{"recipe": {"title": "무관한 레시피", "ingredients": ["김치", "돼지고기"]}, "vector_score": 1.0}],
     )
 
-    assert ranked == []
+    assert len(ranked) == 1
+    assert ranked[0]["match_count"] == 0
+
+
+def test_weak_match_is_used_only_when_three_strong_candidates_are_unavailable() -> None:
+    """매칭 1개 후보는 강한 후보가 부족할 때만 3개를 채우는 용도로 사용합니다."""
+    candidates = [
+        {"recipe": {"title": "강한1", "ingredients": ["연어", "양파"]}},
+        {"recipe": {"title": "강한2", "ingredients": ["연어", "대파"]}},
+        {"recipe": {"title": "약한", "ingredients": ["연어"]}},
+    ]
+    ranked = rank_candidates(["연어", "양파", "대파"], candidates, top_k=3)
+    assert [item["recipe"]["title"] for item in ranked] == ["강한1", "강한2", "약한"]
+
+
+def test_core_ingredients_are_prioritized_over_vector_score() -> None:
+    """연어처럼 핵심 재료가 실제로 있는 후보를 벡터 점수보다 우선합니다."""
+    ranked = rank_candidates(
+        ["연어"],
+        [
+            {"recipe": {"title": "무관", "ingredients": ["소금", "양파"]}, "vector_score": 1.0},
+            {"recipe": {"title": "연어", "ingredients": ["연어", "소금"]}, "vector_score": 0.2},
+        ],
+        top_k=2,
+    )
+    assert ranked[0]["recipe"]["title"] == "연어"
+
+
+def test_targeted_ingredient_aliases_match() -> None:
+    """연어·떡·어묵의 주요 표기 변형을 canonical 재료로 매칭합니다."""
+    score = calculate_match_score(["연어", "떡", "어묵"], ["훈제연어 100g", "가래떡 2줄", "오뎅 3개"])
+    assert score["match_count"] == 3
 
 
 def test_cuisine_filter_uses_or_condition() -> None:

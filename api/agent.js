@@ -1,6 +1,13 @@
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-5.6-terra';
 const CUISINES = ['한식', '중식', '양식', '일식', '분식'];
+const INGREDIENT_ALIASES = {
+  '훈제연어': '연어', '생연어': '연어', '연어회': '연어',
+  '가래떡': '떡', '떡볶이떡': '떡', '떡국떡': '떡',
+  '오뎅': '어묵', '부산어묵': '어묵', '어묵꼬치': '어묵',
+  '칵테일새우': '새우', '새우살': '새우'
+};
+const CORE_INGREDIENTS = new Set(['연어', '어묵', '떡', '새우', '닭가슴살', '닭고기', '브로콜리', '당근', '파스타면', '버섯', '우유']);
 const RECIPE_CUISINES = {
   '계란 볶음밥': ['한식'], '김치찌개': ['한식'], '두부 구이': ['한식'],
   '닭가슴살 채소볶음': ['한식'], '토마토 파스타': ['양식'], '감자채 볶음': ['한식']
@@ -125,6 +132,29 @@ function normalizeIngredient(value) {
     .replace(/[\s.,。/·]+/g, '');
 }
 
+function canonicalIngredient(value) {
+  const normalized = normalizeIngredient(value);
+  return INGREDIENT_ALIASES[normalized] || normalized;
+}
+
+function rankRecipeHits(userIngredients, hits, limit = 40) {
+  const userKeys = new Set(userIngredients.map(canonicalIngredient).filter(Boolean));
+  const scored = hits.map(hit => {
+    const recipeKeys = new Set((hit.requiredIngredients || []).map(canonicalIngredient).filter(Boolean));
+    const matched = [...userKeys].filter(key => recipeKeys.has(key));
+    const matchCount = matched.length;
+    const matchRatio = matchCount / Math.max(recipeKeys.size, 1);
+    const coverageRatio = matchCount / Math.max(userKeys.size, 1);
+    const coreMatchCount = matched.filter(key => CORE_INGREDIENTS.has(key)).length;
+    const finalScore = (matchCount * 0.5) + (matchRatio * 0.3) + (coverageRatio * 0.2);
+    return { ...hit, matchCount, matchRatio, coverageRatio, coreMatchCount, finalScore };
+  });
+  scored.sort((a, b) => b.coreMatchCount - a.coreMatchCount || b.finalScore - a.finalScore || (b.similarity || 0) - (a.similarity || 0));
+  const strong = scored.filter(hit => hit.matchCount > 1);
+  const weak = scored.filter(hit => hit.matchCount <= 1);
+  return (strong.length >= 3 ? strong : [...strong, ...weak]).slice(0, Math.max(limit, 3));
+}
+
 // 검색된 레시피 원문에서 쉼표로 나열된 필요 재료를 추출합니다.
 function extractRecipeIngredients(content) {
   const labeledMatch = String(content || '').match(/필요\s*재료\s*:\s*(.+?)(?:\.\s*(?:조리 순서|태그|조리 시간|난이도)\s*:|$)/);
@@ -211,9 +241,11 @@ module.exports = async function handler(req, res) {
         ? hit.metadata.cuisine
         : inferCuisine(hit.recipe_name, hit.content)
     }));
+    // 벡터 유사도 후보를 재료 매칭 점수와 핵심 재료 우선순위로 재정렬합니다.
+    const rankedHits = rankRecipeHits(body.ingredients, enrichedHits);
 
     // 검색 후보는 충분히 확보하되, LLM 컨텍스트는 제한해 요청 크기 초과를 방지합니다.
-    const promptHits = enrichedHits.slice(0, 40);
+    const promptHits = rankedHits.slice(0, 40);
     let generatedMenus = [];
     try {
       const answer = await openai('chat/completions', {
@@ -230,9 +262,9 @@ module.exports = async function handler(req, res) {
       // LLM 응답이 실패해도 검색 후보의 기본 정보로 3개를 구성합니다.
       console.error('LLM recommendation failed:', error.message);
     }
-    const hitByName = new Map(enrichedHits.map(hit => [hit.recipe_name, hit]));
+    const hitByName = new Map(rankedHits.map(hit => [hit.recipe_name, hit]));
     const normalizedMenuName = value => String(value || '').replace(/\s+/g, '');
-    const findHit = name => hitByName.get(name) || enrichedHits.find(hit => normalizedMenuName(hit.recipe_name) === normalizedMenuName(name));
+    const findHit = name => hitByName.get(name) || rankedHits.find(hit => normalizedMenuName(hit.recipe_name) === normalizedMenuName(name));
     const excludedNames = new Set(exclude);
     const seenGeneratedNames = new Set();
     // 모델이 검색 문서에 없는 이름이나 선택하지 않은 카테고리를 반환하지 못하게 합니다.
@@ -253,7 +285,7 @@ module.exports = async function handler(req, res) {
     const isPreferredMenu = menu => !cuisines.length || (menu.cuisine || []).some(cuisine => cuisines.includes(cuisine));
     menus.sort((left, right) => Number(!isPreferredMenu(right)) - Number(!isPreferredMenu(left)));
     const seenNames = new Set(menus.map(menu => menu.name));
-    for (const hit of enrichedHits) {
+    for (const hit of rankedHits) {
       if (menus.length >= 3) break;
       if (seenNames.has(hit.recipe_name) || excludedNames.has(hit.recipe_name)) continue;
       menus.push(fallbackMenuFromHit(hit, body.ingredients));

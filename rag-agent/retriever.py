@@ -8,6 +8,7 @@ from typing import Any, Iterable
 
 DEFAULT_ALIASES_PATH = Path(__file__).with_name("ingredient_aliases.json")
 FIXED_CUISINES = {"한식", "중식", "양식", "일식", "분식"}
+CORE_INGREDIENTS = {"연어", "어묵", "떡", "새우", "닭가슴살", "닭고기", "브로콜리", "당근", "파스타면", "버섯", "우유"}
 QUANTITY_PATTERN = re.compile(
     r"(?:\d+(?:[./]\d+)?|반|한|두|세|네|다섯)\s*"
     r"(?:kg|g|mg|ml|l|개|장|줄|쪽|알|컵|큰술|작은술|스푼|봉|팩|모|근|마리|인분|줌|대)?",
@@ -56,8 +57,6 @@ def calculate_match_score(
     match_ratio = match_count / max(len(recipe_key_to_value), 1)
     coverage_ratio = match_count / max(len(user_keys), 1)
     final_score = (match_count * 0.5) + (match_ratio * 0.3) + (coverage_ratio * 0.2)
-    if match_count <= 1:
-        final_score *= 0.25
     return {
         "match_count": match_count,
         "match_ratio": round(match_ratio, 4),
@@ -65,6 +64,7 @@ def calculate_match_score(
         "final_score": round(final_score, 4),
         "matched_ingredients": matched,
         "missing_ingredients": missing,
+        "core_match_count": len(matched_keys & CORE_INGREDIENTS),
     }
 
 
@@ -88,11 +88,17 @@ def rank_candidates(
     for candidate in candidates:
         recipe = candidate["recipe"]
         score = calculate_match_score(user_ingredients, recipe["ingredients"], aliases)
-        if score["match_count"] == 0:
-            continue
         ranked.append({**candidate, **score})
-    ranked.sort(key=lambda item: (-item["final_score"], -item["match_count"], -item.get("vector_score", 0)))
-    return ranked[:top_k]
+    ranked.sort(key=lambda item: (
+        -item["core_match_count"],
+        -item["final_score"],
+        -item["match_count"],
+        -item.get("vector_score", 0),
+    ))
+    strong = [item for item in ranked if item["match_count"] > 1]
+    weak = [item for item in ranked if item["match_count"] <= 1]
+    # 일치 재료가 2개 이상인 후보를 먼저 쓰고, 3개가 부족할 때만 약한 후보로 보충합니다.
+    return (strong + weak)[:top_k]
 
 
 def select_diverse_candidates(
