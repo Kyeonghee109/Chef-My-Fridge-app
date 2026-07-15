@@ -8,6 +8,8 @@ if (!OPENAI_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 // vector(1536) payload와 HNSW 인덱스 갱신으로 statement timeout이 날 수 있어 기본값을 작게 잡습니다.
 const BATCH_SIZE = Number(process.env.INGEST_BATCH_SIZE || 10);
 const GROUP_SIZE = Number(process.env.INGEST_GROUP_SIZE || 5000);
+const CHUNK_SIZE = Number(process.env.RECIPE_CHUNK_SIZE || 300);
+const CHUNK_OVERLAP = Number(process.env.RECIPE_CHUNK_OVERLAP || 50);
 const MAX_RETRIES = 3;
 const PAGE_SIZE = 1000;
 const recipeDataPath = process.env.RECIPE_DATA_PATH || new URL('../rag-agent/data/recipes.json', import.meta.url);
@@ -22,6 +24,7 @@ const recipes = rawRecipes.map(recipe => ({
   id: String(recipe.id || recipe.name || recipe.title),
   name: recipe.name || recipe.title,
   cuisine: Array.isArray(recipe.cuisine) ? recipe.cuisine : [],
+  source: recipe.source || null,
   text: recipe.text || [
     recipe.title,
     `설명: ${recipe.description || ''}`,
@@ -35,17 +38,20 @@ const recipes = rawRecipes.map(recipe => ({
 }));
 
 const chunks = recipes.flatMap(recipe => {
-  const size = 300;
-  const overlap = 50;
+  if (!Number.isFinite(CHUNK_SIZE) || CHUNK_SIZE < 1 || !Number.isFinite(CHUNK_OVERLAP) || CHUNK_OVERLAP < 0 || CHUNK_OVERLAP >= CHUNK_SIZE) {
+    throw new Error('RECIPE_CHUNK_SIZE와 RECIPE_CHUNK_OVERLAP 값을 확인하세요.');
+  }
   const output = [];
   let chunkIndex = 0;
-  for (let start = 0; start < recipe.text.length; start += size - overlap) {
+  for (let start = 0; start < recipe.text.length; start += CHUNK_SIZE - CHUNK_OVERLAP) {
     output.push({
       chunk_key: `${recipe.id}::${chunkIndex}`,
       recipe_name: recipe.name,
-      content: recipe.text.slice(start, start + size),
+      content: recipe.text.slice(start, start + CHUNK_SIZE),
       metadata: {
-        source: 'recipes.json',
+        source: recipe.source?.dataset || 'recipes.json',
+        source_provider: recipe.source?.provider || null,
+        source_recipe_id: recipe.source?.recipe_id || null,
         recipe_id: recipe.id,
         chunk_index: chunkIndex,
         cuisine: recipe.cuisine
@@ -147,6 +153,7 @@ const pendingChunks = chunks.filter(chunk => (
 console.log(`레시피 ${recipes.length}개, 전체 청크 ${chunks.length}개`);
 console.log(`Supabase 기존 row ${existingRows.length}개, 이미 확인된 청크 ${chunks.length - pendingChunks.length}개, 신규/변경 삽입 예정 ${pendingChunks.length}개`);
 console.log(`그룹 크기 ${GROUP_SIZE}개, 배치 크기 ${BATCH_SIZE}개, 최대 재시도 ${MAX_RETRIES}회`);
+console.log(`청크 크기 ${CHUNK_SIZE}자, 오버랩 ${CHUNK_OVERLAP}자`);
 
 const failures = [];
 let completed = chunks.length - pendingChunks.length;
