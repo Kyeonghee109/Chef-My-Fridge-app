@@ -24,12 +24,12 @@
     p { line-height:1.7; }
     .hero { display:grid; align-items:center; min-height:100vh; margin-bottom:0; opacity:var(--hero-opacity,1); transform:translateY(var(--hero-y,0px)) scale(var(--hero-scale,1)); transform-origin:center top; will-change:opacity,transform; }
     .hero[hidden] { display:none; }
-    .hero-mark { position:relative; display:grid; place-items:center; min-height:420px; max-width:960px; margin:0 auto; overflow:hidden; background:transparent; }
-    .hero-copy { position:relative; z-index:1; max-width:800px; padding:32px; color:var(--muted); font-size:1.05rem; text-align:center; }
+    .hero-mark { position:relative; display:grid; place-items:center; min-height:420px; max-width:960px; margin:0 auto; overflow:hidden; isolation:isolate; background:transparent; }
+    .hero-copy { position:relative; z-index:2; max-width:800px; padding:32px; color:var(--muted); font-size:1.05rem; text-align:center; }
     .hero-copy h1 { margin:0 0 18px; animation:hero-title-in .8s cubic-bezier(.22,1,.36,1) both; }
     .hero-copy > p:last-child { white-space:nowrap; }
     .hero-copy > p:last-child { animation:hero-copy-in .8s .15s cubic-bezier(.22,1,.36,1) both; }
-    .hero-food { position:absolute; left:var(--left); top:var(--top); z-index:0; font-size:var(--size); line-height:1; user-select:none; transform:translate(0,0); opacity:0; animation:hero-icon-in .7s cubic-bezier(.22,1,.36,1) var(--entrance) both; transition:transform .45s ease-out; }
+    .hero-food { position:absolute; left:var(--left); top:var(--top); z-index:1; font-size:var(--size); line-height:1; user-select:none; pointer-events:none; transform:translate(0,0); opacity:0; animation:hero-icon-in .7s cubic-bezier(.22,1,.36,1) var(--entrance) both; transition:transform .45s ease-out; }
     .hero-food-glyph { display:block; animation-duration:var(--duration); animation-timing-function:ease-in-out; animation-iteration-count:infinite; animation-direction:alternate; animation-delay:var(--delay); }
     .float-bacon { animation-name:float-bacon; } .float-shrimp { animation-name:float-shrimp; } .float-curry { animation-name:float-curry; } .float-pan { animation-name:float-pan; } .float-pasta { animation-name:float-pasta; } .float-egg { animation-name:float-egg; } .float-salad { animation-name:float-salad; }
     @keyframes hero-title-in { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
@@ -143,10 +143,10 @@
     <section class="hero">
       <div class="hero-mark" id="heroMark">
         <div class="hero-copy"><p class="eyebrow">Cook with what you have</p><h1>냉장고 속 재료로 오늘의 메뉴를 찾아드려요</h1><p>가지고 있는 재료를 고르면, 지금 만들기 좋은 메뉴와 레시피를 찾아드릴게요.</p></div>
-        <span class="hero-food" data-depth="0.35" style="--left:10%;--top:18%;--size:2.5rem;--duration:6.2s;--delay:.2s;--entrance:.1s" aria-hidden="true"><span class="hero-food-glyph float-bacon">🥓</span></span>
+        <span class="hero-food" data-depth="0.35" style="--left:5%;--top:22%;--size:2.5rem;--duration:6.2s;--delay:.2s;--entrance:.1s" aria-hidden="true"><span class="hero-food-glyph float-bacon">🥓</span></span>
         <span class="hero-food" data-depth="0.55" style="--left:47%;--top:4%;--size:2.8rem;--duration:7.1s;--delay:.7s;--entrance:.25s" aria-hidden="true"><span class="hero-food-glyph float-shrimp">🍤</span></span>
-        <span class="hero-food" data-depth="0.7" style="--left:84%;--top:17%;--size:3rem;--duration:5.8s;--delay:.4s;--entrance:.4s" aria-hidden="true"><span class="hero-food-glyph float-curry">🍛</span></span>
-        <span class="hero-food" data-depth="0.45" style="--left:88%;--top:52%;--size:2.3rem;--duration:7.7s;--delay:.9s;--entrance:.55s" aria-hidden="true"><span class="hero-food-glyph float-pan">🥘</span></span>
+        <span class="hero-food" data-depth="0.7" style="--left:89%;--top:22%;--size:3rem;--duration:5.8s;--delay:.4s;--entrance:.4s" aria-hidden="true"><span class="hero-food-glyph float-curry">🍛</span></span>
+        <span class="hero-food" data-depth="0.45" style="--left:91%;--top:56%;--size:2.3rem;--duration:7.7s;--delay:.9s;--entrance:.55s" aria-hidden="true"><span class="hero-food-glyph float-pan">🥘</span></span>
         <span class="hero-food" data-depth="0.8" style="--left:70%;--top:82%;--size:2.7rem;--duration:6.8s;--delay:.1s;--entrance:.7s" aria-hidden="true"><span class="hero-food-glyph float-pasta">🍝</span></span>
         <span class="hero-food" data-depth="0.6" style="--left:25%;--top:82%;--size:2.5rem;--duration:5.5s;--delay:.6s;--entrance:.85s" aria-hidden="true"><span class="hero-food-glyph float-egg">🍳</span></span>
         <span class="hero-food" data-depth="0.4" style="--left:5%;--top:52%;--size:2.2rem;--duration:7.4s;--delay:.3s;--entrance:1s" aria-hidden="true"><span class="hero-food-glyph float-salad">🥗</span></span>
