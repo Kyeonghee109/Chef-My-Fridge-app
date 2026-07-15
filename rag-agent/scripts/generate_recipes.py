@@ -47,19 +47,19 @@ STYLES = [
     ("일식", "덮밥", "덮밥", ["쯔유 2큰술", "밥 1공기"], 25),
     ("일식", "카레", "카레", ["카레가루 2큰술", "밥 1공기"], 35),
     ("일식", "우동", "면 요리", ["우동면 1봉", "쯔유 2큰술"], 20),
-    ("분식", "떡볶이", "분식", ["고추장 2큰술", "물엿 1큰술"], 25),
+    ("한식", "떡볶이", "분식", ["고추장 2큰술", "물엿 1큰술"], 25),
 ]
 
-FIXED_CUISINES = {"한식", "중식", "양식", "일식", "분식"}
+FIXED_CUISINES = {"한식", "중식", "양식", "일식"}
 EXISTING_CUISINES = {
     "계란 볶음밥": ["한식"], "김치찌개": ["한식"], "두부 구이": ["한식"],
     "닭가슴살 채소볶음": ["한식"], "토마토 파스타": ["양식"], "감자채 볶음": ["한식"],
-    "소불고기": ["한식"], "잡채": ["한식"], "김치전": ["한식", "분식"],
+    "소불고기": ["한식"], "잡채": ["한식"], "김치전": ["한식"],
     "된장찌개": ["한식"], "까르보나라": ["양식"], "치즈 오믈렛": ["양식"],
     "치킨 카레": ["일식"], "토마토 피자 토스트": ["양식"], "마파두부": ["중식"],
     "새우 볶음밥": ["중식"], "탕수육": ["중식"], "짜장면": ["중식"],
     "태국식 바질 치킨": ["양식"], "그릭 샐러드": ["양식"], "해산물 리소토": ["양식"],
-    "비빔국수": ["한식", "분식"], "해물파전": ["한식"],
+    "비빔국수": ["한식"], "해물파전": ["한식"],
 }
 
 
@@ -68,8 +68,19 @@ def make_recipe(recipe_id: int, style: tuple, main: tuple[str, str], vegetable: 
     category, suffix, tag, sauce, cook_time = style
     main_name, main_amount = main
     vegetable_name, vegetable_amount = vegetable
-    ingredients = [f"{main_name} {main_amount}", f"{vegetable_name} {vegetable_amount}", "양파 1/2개", "마늘 1쪽", *sauce]
-    unique_ingredients = list(dict.fromkeys(ingredients))
+    raw_ingredients = [f"{main_name} {main_amount}", f"{vegetable_name} {vegetable_amount}", "양파 1/2개", "마늘 1쪽", *sauce]
+    unique_ingredients = []
+    seen_ingredients = set()
+    for value in raw_ingredients:
+        parts = value.rsplit(" ", 1)
+        name, amount = parts if len(parts) == 2 else (value, "1")
+        unit = "개"
+        if amount[-1:].isalpha():
+            amount, unit = amount[:-1], amount[-1:]
+        item = {"name": name, "amount": amount, "unit": unit}
+        if name not in seen_ingredients:
+            unique_ingredients.append(item)
+            seen_ingredients.add(name)
     title = f"{main_name} {vegetable_name} {suffix}" + (f" {variant}번" if variant else "")
     variant_offset = [0, -10, -5, 5, 10, 20][variant % 6] if variant else 0
     effective_cook_time = max(10, min(60, cook_time + variant_offset))
@@ -77,11 +88,14 @@ def make_recipe(recipe_id: int, style: tuple, main: tuple[str, str], vegetable: 
     return {
         "id": f"generated-{recipe_id:05d}",
         "title": title,
+        "description": f"{main_name}과 {vegetable_name}을 {tag} 방식으로 조리해 감칠맛을 살린 요리입니다.",
         "ingredients": unique_ingredients,
         "steps": [
-            f"{main_name}과 {vegetable_name}을 손질합니다.",
-            f"팬이나 냄비에 {main_name}, 양파, 마늘을 넣고 익힙니다.",
-            f"{vegetable_name}과 양념을 넣고 {tag} 방식으로 {effective_cook_time}분간 조리합니다.",
+            f"{main_name}은 먹기 좋은 크기로 썰고 {vegetable_name}은 깨끗이 씻어 한입 크기로 준비합니다.",
+            f"팬이나 냄비를 중불로 1분 예열한 뒤 식용유를 두르고 마늘과 양파를 1~2분 볶아 향을 냅니다.",
+            f"{main_name}을 먼저 넣고 속까지 익도록 3~5분 볶거나 굽습니다.",
+            f"{vegetable_name}과 양념을 넣고 {tag} 방식으로 4~6분 더 조리하며 재료가 고르게 익도록 섞습니다.",
+            f"불을 끄고 간을 확인한 뒤 1분간 뜸을 들여 그릇에 담아 완성합니다.",
         ],
         "tags": [category, tag, suffix, "재료 조합 레시피"],
         "cuisine": [category],

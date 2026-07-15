@@ -239,6 +239,8 @@ function objectParticle(value) {
 }
 
 function cardDescription(value, hit) {
+  const sourceDescription = extractLabeledValue(hit?.content, '설명');
+  if (sourceDescription) return sourceDescription;
   const description = String(value || '').replace(/\s+/g, ' ').trim();
   const looksLikeRecipe = description.length > 80 || /준비합니다|예열|넣고|볶아|볶고|익히|조리|분간|불을|단계/.test(description) || (description.match(/[.。!?]/g) || []).length > 1;
   if (description && !looksLikeRecipe) return description;

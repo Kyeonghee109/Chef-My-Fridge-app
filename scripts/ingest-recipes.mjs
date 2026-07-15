@@ -24,6 +24,7 @@ const recipes = rawRecipes.map(recipe => ({
   cuisine: Array.isArray(recipe.cuisine) ? recipe.cuisine : [],
   text: recipe.text || [
     recipe.title,
+    `설명: ${recipe.description || ''}`,
     `음식 종류: ${(recipe.cuisine || []).join(', ')}`,
     `필요 재료: ${(recipe.ingredients || []).map(formatIngredient).join(', ')}`,
     `조리 순서: ${(recipe.steps || []).join(' ')}`,

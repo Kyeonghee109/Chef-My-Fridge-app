@@ -5,7 +5,14 @@ from pathlib import Path
 from typing import Any
 
 
-FIXED_CUISINES = {"한식", "중식", "양식", "일식", "분식"}
+FIXED_CUISINES = {"한식", "중식", "양식", "일식"}
+
+
+def format_ingredient(value: Any) -> str:
+    """문자열 또는 수량 객체 재료를 검색 문서용 문자열로 변환합니다."""
+    if isinstance(value, dict):
+        return " ".join(str(value.get(key, "")) for key in ("name", "amount", "unit") if value.get(key, "") != "")
+    return str(value)
 
 
 def load_recipes(path: str | Path) -> list[dict[str, Any]]:
@@ -20,6 +27,8 @@ def load_recipes(path: str | Path) -> list[dict[str, Any]]:
             raise ValueError(f"레시피 {index}에 필요한 필드가 없습니다: {sorted(required)}")
         if not isinstance(recipe["ingredients"], list) or not isinstance(recipe["steps"], list):
             raise ValueError(f"레시피 {index}의 ingredients와 steps는 배열이어야 합니다.")
+        if any(not isinstance(item, (str, dict)) or (isinstance(item, dict) and not item.get("name")) for item in recipe["ingredients"]):
+            raise ValueError(f"레시피 {index}의 ingredients 항목은 문자열 또는 name을 가진 객체여야 합니다.")
         if not isinstance(recipe["cuisine"], list) or not recipe["cuisine"] or not set(recipe["cuisine"]).issubset(FIXED_CUISINES):
             raise ValueError(f"레시피 {index}의 cuisine은 고정 카테고리 배열이어야 합니다.")
     return data
@@ -30,7 +39,8 @@ def recipe_to_document(recipe: dict[str, Any]) -> str:
     return "\n".join(
         [
             f"제목: {recipe['title']}",
-            f"재료: {', '.join(recipe['ingredients'])}",
+            f"설명: {recipe.get('description', '')}",
+            f"재료: {', '.join(format_ingredient(item) for item in recipe['ingredients'])}",
             f"태그: {', '.join(recipe['tags'])}",
             f"음식 종류: {', '.join(recipe['cuisine'])}",
             f"조리 시간: {recipe['cook_time']}분",

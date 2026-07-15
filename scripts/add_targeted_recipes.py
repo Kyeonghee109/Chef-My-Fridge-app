@@ -12,14 +12,20 @@ DATA_PATH = Path(__file__).parents[1] / "rag-agent" / "data" / "recipes.json"
 def make_recipe(recipe_id: int, title: str, cuisine: str, required: list[str], method: str, cook_time: int, difficulty: str) -> dict:
     """재료·조리법·메타데이터를 갖춘 targeted 레시피를 만듭니다."""
     main = "와 ".join(required[:2]) if len(required) > 1 else required[0]
+    def ingredient(name: str, amount: int, unit: str) -> dict:
+        return {"name": name, "amount": amount, "unit": unit}
+
     return {
         "id": f"generated-{recipe_id}",
         "title": title,
-        "ingredients": required + ["소금", "식용유"],
+        "description": f"{required[0]}과 {required[1] if len(required) > 1 else '채소'}를 {method} 조리해 풍미를 살린 요리입니다.",
+        "ingredients": [*(ingredient(name, 150 if index == 0 else 100, "g") for index, name in enumerate(required)), ingredient("소금", 1, "작은술"), ingredient("식용유", 1, "큰술")],
         "steps": [
-            f"{main}을 손질합니다.",
-            f"팬이나 냄비에 {', '.join(required[:3])}을 넣고 {method}합니다.",
-            f"간을 맞추고 {cook_time}분 동안 마무리합니다.",
+            f"{required[0]}은 먹기 좋은 크기로 썰고 나머지 재료는 깨끗이 씻어 준비합니다.",
+            "팬이나 냄비를 중불로 1분 예열한 뒤 식용유를 두르고 향채를 1~2분 볶습니다.",
+            f"{required[0]}을 먼저 넣고 3~5분 익힌 뒤 {', '.join(required[1:3])}을 넣습니다.",
+            f"{method} 방식으로 4~6분 더 조리하며 소금으로 간을 맞춥니다.",
+            f"불을 끄고 1분간 뜸을 들인 뒤 그릇에 담아 약 {cook_time}분 만에 완성합니다.",
         ],
         "tags": [cuisine, method, "골든셋 보강"],
         "cook_time": cook_time,
@@ -60,10 +66,10 @@ def main() -> None:
         fresh_titles = [title for title in titles if title not in existing_titles]
         next_id = add_family(additions, next_id, cuisine, fresh_titles, required, methods, times)
 
-    family("분식", [
+    family("한식", [
         "어묵볶음", "매콤 어묵볶음", "간장 어묵볶음", "어묵탕", "얼큰 어묵탕", "어묵꼬치", "간장 어묵꼬치", "어묵조림", "매운 어묵조림", "어묵전", "어묵튀김", "어묵김밥", "어묵 비빔국수", "어묵 우동", "어묵 라볶이", "어묵 떡국", "어묵 순대볶음", "어묵 야채볶음", "어묵 카레", "어묵 덮밥", "어묵 주먹밥", "어묵 샐러드", "어묵 간식꼬치", "치즈 어묵구이", "고추 어묵볶음", "대파 어묵전", "어묵 김치찌개", "어묵 콩나물국", "어묵 볶음면", "어묵 유부주머니", "어묵 떡꼬치", "어묵 국물떡볶이"
     ], ["어묵", "대파", "양파", "고추장"], ["볶음", "끓이기", "꼬치로 굽기", "조림", "부치기", "튀기기", "무치기"], [10, 15, 20, 25, 30])
-    family("분식", [
+    family("한식", [
         "기본 떡볶이", "간장 떡볶이", "궁중 떡볶이", "치즈 떡볶이", "매운 떡볶이", "떡국", "만두 떡국", "떡꼬치", "매콤 떡꼬치", "떡튀김", "떡강정", "떡갈비", "떡갈비 덮밥", "김치 떡볶이", "카레 떡볶이", "크림 떡볶이", "로제 떡볶이", "떡잡채", "떡 불고기", "떡 라볶이", "떡 어묵탕", "떡 순대볶음", "떡 김밥", "떡 주먹밥", "떡 계란국", "떡 버터구이", "떡 고추장조림", "떡 간장조림", "떡 야채볶음", "떡 닭갈비", "떡 해물볶음", "떡 카레", "떡 샐러드"
     ], ["떡", "대파", "양파", "고추장"], ["볶음", "끓이기", "꼬치로 굽기", "튀기기", "조림", "오븐에 굽기", "무치기"], [10, 15, 20, 25, 35])
     family("일식", [
