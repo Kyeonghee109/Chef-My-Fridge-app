@@ -109,8 +109,8 @@ function promptFor({ ingredients, filters, exclude, hits }) {
 음식 종류: ${filters.cuisines?.join(', ') || '전체'}
 제외할 직전 메뉴: ${exclude.join(', ') || '없음'}
 
-아래 검색 문서에 있는 레시피를 근거로 정확히 3개 추천하세요. 선택한 음식 종류가 있으면 해당 종류를 우선하고, 3개가 부족할 때만 다른 음식 종류를 보충하세요. 검색 문서에 없는 조리법을 새로 지어내지 말고, 재료가 부족하면 missingIngredients에 표시하세요. 제외 메뉴는 반환하지 마세요. 각 메뉴의 recipe 배열은 최소 5~6개의 현실적인 조리 단계로 작성하세요. 모든 단계에 구체적인 조리 시간(예: 2~3분), 불 세기(강불/중불/약불), 실제로 그 단계에서 사용하는 재료·조미료와 양만 포함하세요. 사용하지 않는 재료나 조미료는 절대 언급하지 말고, "사용하지 않음", "아직 넣지 않음" 같은 부정 설명도 쓰지 마세요. 음식 종류·필요 재료·태그·조리 시간·난이도는 각각 별도 필드에만 넣고 recipe 배열에는 절대 넣지 마세요. 재료 손질, 예열 또는 기름 두르기, 핵심 조리, 간 맞추기, 마무리 순서가 자연스럽게 이어지도록 작성하세요. 반드시 JSON 객체 하나만 반환하세요.
-형식: {"menus":[{"name":"메뉴명","description":"짧은 설명","cuisine":["음식 종류"],"tags":["태그"],"recipe":["조리 단계"],"cookTime":"조리 시간","difficulty":"쉬움|보통|어려움","ingredients":["필요 재료"],"missingIngredients":["추가 재료"]}]}
+아래 검색 문서에 있는 레시피를 근거로 정확히 3개 추천하세요. 선택한 음식 종류가 있으면 해당 종류를 우선하고, 3개가 부족할 때만 다른 음식 종류를 보충하세요. 검색 문서에 없는 조리법을 새로 지어내지 말고, 재료가 부족하면 missingIngredients에 표시하세요. 제외 메뉴는 반환하지 마세요. description은 카드에 보여 줄 60자 이하의 한 문장 메뉴 소개만 작성하세요. 조리 순서, 시간, 단계, "넣고·볶고·익히고·준비합니다" 같은 과정 설명은 description에 절대 넣지 마세요. 각 메뉴의 recipe 배열은 최소 5~6개의 현실적인 조리 단계로 작성하세요. 모든 단계에 구체적인 조리 시간(예: 2~3분), 불 세기(강불/중불/약불), 실제로 그 단계에서 사용하는 재료·조미료와 양만 포함하세요. 사용하지 않는 재료나 조미료는 절대 언급하지 말고, "사용하지 않음", "아직 넣지 않음" 같은 부정 설명도 쓰지 마세요. 음식 종류·필요 재료·태그·조리 시간·난이도는 각각 별도 필드에만 넣고 recipe 배열에는 절대 넣지 마세요. 재료 손질, 예열 또는 기름 두르기, 핵심 조리, 간 맞추기, 마무리 순서가 자연스럽게 이어지도록 작성하세요. 반드시 JSON 객체 하나만 반환하세요.
+형식: {"menus":[{"name":"메뉴명","description":"돼지고기와 감자를 활용한 파스타입니다.","cuisine":["음식 종류"],"tags":["태그"],"recipe":["조리 단계"],"cookTime":"조리 시간","difficulty":"쉬움|보통|어려움","ingredients":["필요 재료"],"missingIngredients":["추가 재료"]}]}
 
 <검색 문서>
 ${context}
@@ -233,6 +233,20 @@ function sameIngredientList(left, right) {
   return JSON.stringify(normalizeList(left)) === JSON.stringify(normalizeList(right));
 }
 
+function objectParticle(value) {
+  const code = String(value || '').trim().charCodeAt(String(value || '').trim().length - 1);
+  return code >= 0xac00 && code <= 0xd7a3 && (code - 0xac00) % 28 ? '을' : '를';
+}
+
+function cardDescription(value, hit) {
+  const description = String(value || '').replace(/\s+/g, ' ').trim();
+  const looksLikeRecipe = description.length > 80 || /준비합니다|예열|넣고|볶아|볶고|익히|조리|분간|불을|단계/.test(description) || (description.match(/[.。!?]/g) || []).length > 1;
+  if (description && !looksLikeRecipe) return description;
+  const ingredients = (hit?.requiredIngredients || []).filter(Boolean).slice(0, 2);
+  const main = ingredients.join('와 ');
+  return main ? `${main}${objectParticle(main)} 활용한 ${hit.recipe_name}입니다.` : `주재료를 활용한 ${hit.recipe_name}입니다.`;
+}
+
 function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = true }) {
   const failures = [];
   if (!hit) failures.push('검색 후보에 없는 메뉴');
@@ -250,6 +264,7 @@ function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = t
     value: {
       ...menu,
       name: normalizeRecipeName(hit?.recipe_name),
+      description: cardDescription(menu?.description, hit),
       cuisine: hit?.cuisine || [],
       cookTime: resolveCookTime(menu?.cookTime, hit?.content, menu?.recipe),
       ingredients: requiredIngredients,
@@ -320,7 +335,7 @@ function fallbackMenuFromHit(hit, ownedIngredients) {
   return {
     name: normalizeRecipeName(hit.recipe_name),
     cuisine: hit.cuisine || metadata.cuisine || inferCuisine(hit.recipe_name, content),
-    description: metadata.recipe[0] || normalizeRecipeName(hit.recipe_name),
+    description: cardDescription('', { ...hit, requiredIngredients }),
     recipe: metadata.recipe,
     cookTime: resolveCookTime(metadata.cookTime, content, metadata.recipe),
     difficulty: metadata.difficulty || '보통',
