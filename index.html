@@ -27,8 +27,8 @@
     p { line-height:1.7; }
     .hero { display:grid; align-items:center; min-height:clamp(440px,72vh,720px); margin-bottom:0; opacity:var(--hero-opacity,1); transform:translateY(var(--hero-y,0px)) scale(var(--hero-scale,1)); transform-origin:center top; will-change:opacity,transform; }
     .hero[hidden] { display:none; }
-    .hero-mark { position:relative; display:grid; place-items:center; min-height:420px; max-width:960px; margin:0 auto; overflow:hidden; isolation:isolate; background-image:url("assets/hero-cutting-board.png"); background-position:center; background-size:cover; }
-    .hero-mark::before { display:none; }
+    .hero-mark { position:relative; display:grid; place-items:center; min-height:420px; max-width:960px; margin:0 auto; overflow:hidden; isolation:isolate; background:transparent; }
+    .hero-mark::before { content:""; position:absolute; z-index:1; width:min(84%,840px); aspect-ratio:2.35; border-radius:50%; pointer-events:none; background:radial-gradient(ellipse at center,rgba(244,244,242,.96) 0%,rgba(244,244,242,.78) 46%,rgba(244,244,242,0) 74%); }
     .hero-copy { position:relative; z-index:2; max-width:800px; padding:32px; color:var(--muted); font-size:1.05rem; text-align:center; }
     .hero-copy h1 { margin:0 0 18px; animation:hero-title-in .8s cubic-bezier(.22,1,.36,1) both; }
     .hero-copy > p:last-child { white-space:nowrap; }
@@ -156,8 +156,7 @@
     .favorite-list { display:flex; gap:16px; overflow-x:auto; padding:4px 2px 14px; scroll-snap-type:x mandatory; scroll-behavior:smooth; -webkit-overflow-scrolling:touch; }
     .favorite-list .menu-card { flex:0 0 280px; width:280px; scroll-snap-align:start; }
     .favorite-empty { flex:1; margin:0; padding:28px 0; color:var(--muted); text-align:center; }
-    @media (max-width:768px) { .app { width:min(100% - 22px,560px); padding-top:18px; } header { gap:8px; margin-bottom:32px; } header .brand { font-size:.86rem; white-space:nowrap; } header .brand span { margin-right:4px; font-size:.88rem; } header .button.ghost { padding:5px 7px; font-size:.72rem; } .hero-copy h1 { max-width:none; margin:0 auto 22px; font-size:clamp(1.42rem,7.25vw,2.1rem); line-height:1.25; letter-spacing:-.08em; white-space:normal; } .mobile-title-line { display:block; white-space:nowrap; } h2 { font-size:1.8rem; } .hero, .detail-layout { grid-template-columns:1fr; gap:22px; } .hero-mark { min-height:360px; } .hero-food { font-size:min(var(--size),1.8rem); } .hero-copy { padding:24px 16px; } .hero-copy > p:last-child { font-size:.95rem; line-height:1.65; white-space:normal; } .status-text { font-size:1rem; } .status-ingredient-line { font-size:1.15rem; } .panel { padding:20px; border-radius:22px; } .card-grid, .filters { grid-template-columns:1fr; } .results-head { min-height:300px; } .results-copy { width:100%; } .results-illustration { display:none; } .panel-head { align-items:start; flex-direction:column; } .custom-form { flex-direction:column; } }
-    @media (max-width:768px) { .hero-food { left:var(--left) !important; right:auto !important; top:var(--top) !important; } }
+    @media (max-width:768px) { .app { width:min(100% - 22px,560px); padding-top:18px; } header { gap:8px; margin-bottom:32px; } header .brand { font-size:.86rem; white-space:nowrap; } header .brand span { margin-right:4px; font-size:.88rem; } header .button.ghost { padding:5px 7px; font-size:.72rem; } .hero-copy h1 { max-width:none; margin:0 auto 22px; font-size:clamp(1.42rem,7.25vw,2.1rem); line-height:1.25; letter-spacing:-.08em; white-space:normal; } .mobile-title-line { display:block; white-space:nowrap; } h2 { font-size:1.8rem; } .hero, .detail-layout { grid-template-columns:1fr; gap:22px; } .hero-mark { min-height:360px; } .hero-food { font-size:min(var(--size),1.8rem); } .hero-food:nth-of-type(1) { left:7% !important; top:8% !important; } .hero-food:nth-of-type(2) { left:auto !important; right:7%; top:8% !important; } .hero-food:nth-of-type(3) { left:3% !important; top:46% !important; } .hero-food:nth-of-type(4) { left:auto !important; right:3%; top:46% !important; } .hero-food:nth-of-type(5) { left:14% !important; top:84% !important; } .hero-food:nth-of-type(6) { left:calc(50% - .9rem) !important; top:89% !important; } .hero-food:nth-of-type(7) { left:auto !important; right:14%; top:84% !important; } .hero-copy { padding:24px 16px; } .hero-copy > p:last-child { font-size:.95rem; line-height:1.65; white-space:normal; } .status-text { font-size:1rem; } .status-ingredient-line { font-size:1.15rem; } .panel { padding:20px; border-radius:22px; } .card-grid, .filters { grid-template-columns:1fr; } .results-head { min-height:300px; } .results-copy { width:100%; } .results-illustration { display:none; } .panel-head { align-items:start; flex-direction:column; } .custom-form { flex-direction:column; } }
   </style>
 </head>
 <body>
@@ -223,16 +222,6 @@
     if('IntersectionObserver' in window) new IntersectionObserver(([entry])=>{ if(entry.isIntersecting){ ingredientsScreen.classList.add('is-visible'); ingredientsScreen.dataset.chipsEntered='true'; } },{threshold:.18}).observe(ingredientsScreen); else { ingredientsScreen.classList.add('is-visible'); ingredientsScreen.dataset.chipsEntered='true'; }
     const heroMark = $('#heroMark');
     const heroFoods = [...heroMark.querySelectorAll('.hero-food')];
-    const heroMobileQuery = window.matchMedia('(max-width:768px)');
-    const placeHeroFoods = () => {
-      const [leftMin,leftMax,topMin,topMax] = heroMobileQuery.matches ? [38,78,24,76] : [28,70,20,80];
-      heroFoods.forEach(food=>{
-        food.style.setProperty('--left',`${(leftMin+Math.random()*(leftMax-leftMin)).toFixed(1)}%`);
-        food.style.setProperty('--top',`${(topMin+Math.random()*(topMax-topMin)).toFixed(1)}%`);
-      });
-    };
-    placeHeroFoods();
-    heroMobileQuery.addEventListener('change',placeHeroFoods);
     if (!window.matchMedia('(max-width:768px)').matches) {
       let pointer={x:0,y:0}; let frame=0;
       const moveFoods = () => { frame=0; const rect=heroMark.getBoundingClientRect(); heroFoods.forEach(food=>{ const depth=Number(food.dataset.depth); const x=(pointer.x-rect.left)/rect.width-.5; const y=(pointer.y-rect.top)/rect.height-.5; food.style.transform=`translate(${(x*depth*20).toFixed(1)}px,${(y*depth*20).toFixed(1)}px)`; }); };
