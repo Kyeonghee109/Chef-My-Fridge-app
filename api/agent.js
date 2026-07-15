@@ -3,7 +3,9 @@ const { filterByCuisine: filterRecipesByCuisine } = require('./retrieval');
 const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini';
 // 추천 화면에는 상위 후보 몇 개면 충분합니다. 500개를 내려받으면 Supabase
 // RPC와 Vercel 함수가 불필요하게 오래 걸리고, 이후 정렬 비용도 커집니다.
-const SEARCH_MATCH_COUNT = Number(process.env.RECIPE_SEARCH_MATCH_COUNT || 60);
+// 엄격한 재료·시간 필터를 적용하기 전에 충분한 후보를 확보합니다.
+// 필터 자체를 완화하지 않으므로, 없는 핵심 재료나 초과 시간 메뉴는 여전히 제외됩니다.
+const SEARCH_MATCH_COUNT = Number(process.env.RECIPE_SEARCH_MATCH_COUNT || 200);
 const PROMPT_HIT_COUNT = 8;
 const EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large';
 const PROMPT_CONTENT_LIMIT = 900;
@@ -163,7 +165,7 @@ function joinRecipeChunks(chunks) {
 // 벡터 검색은 레시피의 일부 청크만 반환할 수 있으므로, 후보 레시피의 전체
 // 청크를 한 번 더 조회해 상세 화면에 전달할 조리 순서를 완성합니다.
 async function hydrateRecipeChunks(hits, config) {
-  const names = [...new Set((Array.isArray(hits) ? hits : []).map(hit => hit?.recipe_name).filter(Boolean))].slice(0, 100);
+  const names = [...new Set((Array.isArray(hits) ? hits : []).map(hit => hit?.recipe_name).filter(Boolean))].slice(0, SEARCH_MATCH_COUNT);
   if (!names.length) return hits;
   const quotedNames = names.map(name => `"${String(name).replace(/"/g, '\\\"')}"`).join(',');
   const params = new URLSearchParams({
