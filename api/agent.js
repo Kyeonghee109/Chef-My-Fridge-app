@@ -1,5 +1,6 @@
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const { filterByCuisine: filterRecipesByCuisine } = require('./retrieval');
+const { canonicalIngredientKey } = require('./ingredient-dictionary');
 const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini';
 // 추천 화면에는 상위 후보 몇 개면 충분합니다. 500개를 내려받으면 Supabase
 // RPC와 Vercel 함수가 불필요하게 오래 걸리고, 이후 정렬 비용도 커집니다.
@@ -11,12 +12,6 @@ const EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-
 const PROMPT_CONTENT_LIMIT = 900;
 const CUISINES = ['한식', '중식', '양식', '일식'];
 const LEGACY_CUISINE_ALIASES = { '분식': '한식' };
-const INGREDIENT_ALIASES = {
-  '훈제연어': '연어', '생연어': '연어', '연어회': '연어',
-  '가래떡': '떡', '떡볶이떡': '떡', '떡국떡': '떡',
-  '오뎅': '어묵', '부산어묵': '어묵', '어묵꼬치': '어묵',
-  '칵테일새우': '새우', '새우살': '새우'
-};
 const CORE_INGREDIENTS = new Set(['연어', '어묵', '떡', '새우', '닭가슴살', '닭고기', '브로콜리', '당근', '파스타면', '버섯', '우유']);
 // 입력하지 않아도 보유한 것으로 간주하는 최소 조리 재료입니다. 두부·대파·채소 등은 포함하지 않습니다.
 const PANTRY_INGREDIENTS = new Set(['물', '식용유', '올리브유', '참기름', '소금', '설탕', '후추', '후춧가루', '간장', '식초', '고춧가루', '참깨', '통깨', '깨', '김가루', '다진마늘', '마늘']);
@@ -252,7 +247,7 @@ function normalizeIngredient(value) {
 
 function canonicalIngredient(value) {
   const normalized = normalizeIngredient(value);
-  return INGREDIENT_ALIASES[normalized] || normalized;
+  return canonicalIngredientKey(normalized);
 }
 
 function isPantryIngredient(value) {
