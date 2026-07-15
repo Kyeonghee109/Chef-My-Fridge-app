@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from recipe_loader import load_recipes
 from retriever import filter_candidates_by_cuisines, rank_candidates, select_diverse_candidates
+from trace_utils import trace
 
 
 EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -55,11 +56,13 @@ class RagService:
         )
 
     @staticmethod
+    @trace
     def query_from_ingredients(ingredients: list[str], cuisines: list[str] | None = None) -> str:
         """사용자 재료 목록을 벡터 검색용 자연어 질의로 변환합니다."""
         cuisine_text = f"{' '.join(cuisines or [])} 음식" if cuisines else ""
         return f"{' '.join(ingredients)} {cuisine_text}로 만들 수 있는 요리 레시피"
 
+    @trace
     def recommend(self, ingredients: list[str], top_k: int, cuisines: list[str] | None = None) -> list[Recommendation]:
         """후보 레시피를 검색하고 재료 매칭 결과를 Claude의 구조화된 추천으로 변환합니다."""
         # 호출 경로가 달라도 서비스는 항상 3개 후보를 준비한 뒤 반환합니다.

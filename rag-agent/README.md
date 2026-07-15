@@ -82,3 +82,23 @@ python ingest.py
 ```bash
 pytest -q
 ```
+
+## 함수 호출 추적
+
+`trace_utils.py`의 `@trace` 데코레이터는 함수 입력·출력·실행 시간·토큰 사용량과 중첩 호출 트리를 로그로 출력합니다. LangChain 응답의 `usage_metadata`와 `response_metadata`를 자동 인식하며 API 키와 토큰 값은 마스킹합니다.
+
+```python
+from trace_utils import trace
+
+@trace
+def load_candidates(query: str) -> dict:
+    return {"items": [query]}
+```
+
+로그 예시는 다음과 같습니다.
+
+```text
+@trace 호출 트리
+└─ RagService.recommend {"ms": 842.1, "tokens": {"input": 900, "output": 180, "total": 1080}}
+  └─ RagService.query_from_ingredients {"ms": 0.1, "tokens": {}}
+```
