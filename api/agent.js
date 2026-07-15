@@ -403,8 +403,17 @@ function splitRecipeStepText(value) {
   if (!text) return [];
   return text
     .split(/(?<=[.!?。])\s+/)
-    .map(step => step.trim().replace(/^[-•]\s*/, '').replace(/^[.。\s]+|[.。\s]+$/g, ''))
+    .map(step => removeOverallCookTime(step.trim().replace(/^[-•]\s*/, '').replace(/^[.。\s]+|[.。\s]+$/g, '')))
     .filter(Boolean);
+}
+
+// 조리 시간은 상세 화면 상단 메타 정보로 이미 표시하므로, 단계 마지막에
+// 반복되는 전체 조리 시간 문장만 제거합니다.
+function removeOverallCookTime(value) {
+  return String(value || '')
+    .replace(/\s*전체\s*조리\s*시간\s*(?:은|는|:)\s*(?:약\s*)?\d+(?:\s*[~-]\s*\d+)?\s*분\s*(?:입니다|이에요|예요)?\s*[.!]?/g, '')
+    .trim()
+    .replace(/[.。]\s*$/u, match => match);
 }
 
 function cleanRecipeSteps(recipe) {
