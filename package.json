@@ -1,7 +1,7 @@
 {
   "name": "chef-my-fridge-app",
   "private": true,
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "eval": "node scripts/eval/run-eval.mjs"
   }
