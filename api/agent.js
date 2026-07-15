@@ -639,7 +639,9 @@ module.exports = async function handler(req, res) {
     const filters = body.filters && typeof body.filters === 'object' ? body.filters : {};
     const exclude = Array.isArray(body.exclude) ? body.exclude.filter(item => typeof item === 'string').slice(0, 20) : [];
 
-    const query = `${body.ingredients.join(', ')} ${cuisines.join(', ')} ${filters.time || ''} ${filters.difficulty || ''} ${filters.diet || ''}`;
+    // 별칭을 원문 검색어에도 적용해야 '파스타면' 입력으로 스파게티면 레시피를 RAG 후보에 포함할 수 있습니다.
+    const canonicalQueryIngredients = body.ingredients.map(canonicalIngredient);
+    const query = `${canonicalQueryIngredients.join(', ')} ${cuisines.join(', ')} ${filters.time || ''} ${filters.difficulty || ''} ${filters.diet || ''}`;
     const queryEmbedding = await embed(query, config.openai);
     const selectedHits = await searchRecipes(queryEmbedding, config, cuisines);
     const selectedUniqueHits = await hydrateRecipeChunks(mergeRecipeChunks(selectedHits), config);
