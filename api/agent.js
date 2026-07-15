@@ -1,4 +1,5 @@
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+const { calculateMissingIngredients: calculateMissingIngredientsPure, filterByCuisine: filterRecipesByCuisine } = require('./retrieval');
 const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-5.6-terra';
 const CUISINES = ['한식', '중식', '양식', '일식', '분식'];
 const INGREDIENT_ALIASES = {
@@ -27,7 +28,7 @@ function inferCuisine(recipeName, content = '') {
 const env = () => ({
   openai: process.env.OPENAI_API_KEY,
   supabaseUrl: process.env.SUPABASE_URL,
-  supabaseKey: process.env.SUPABASE_ANON_KEY
+  supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY
 });
 
 async function openai(path, body, key) {
@@ -113,13 +114,13 @@ function validCuisines(cuisines) {
 
 // 레시피의 cuisine 배열과 선택 조건을 비교해 OR 조건으로 후보를 필터링합니다.
 function filterByCuisine(hits, cuisines) {
-  if (!cuisines.length) return hits;
-  return hits.filter(hit => {
-    const cuisine = Array.isArray(hit.metadata?.cuisine) && hit.metadata.cuisine.length
+  const prepared = hits.map(hit => ({
+    ...hit,
+    cuisine: Array.isArray(hit.metadata?.cuisine) && hit.metadata.cuisine.length
       ? hit.metadata.cuisine
-      : inferCuisine(hit.recipe_name, hit.content);
-    return cuisine.some(value => cuisines.includes(value));
-  });
+      : inferCuisine(hit.recipe_name, hit.content)
+  }));
+  return filterRecipesByCuisine(prepared, cuisines);
 }
 
 // 재료명 비교를 위해 공백과 문장부호를 정리합니다.
@@ -178,8 +179,7 @@ function extractRecipeIngredients(content) {
 
 // 사용자가 고른 재료를 기준으로 레시피의 부족 재료를 서버에서 확정합니다.
 function calculateMissingIngredients(ownedIngredients, requiredIngredients) {
-  const owned = new Set(ownedIngredients.map(normalizeIngredient));
-  return requiredIngredients.filter(item => !owned.has(normalizeIngredient(item)));
+  return calculateMissingIngredientsPure(ownedIngredients, requiredIngredients);
 }
 
 function sameIngredientList(left, right) {

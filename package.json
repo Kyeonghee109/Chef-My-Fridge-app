@@ -3,6 +3,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "eval": "node scripts/eval/run-eval.mjs"
+    "eval": "node scripts/eval/run-eval.mjs",
+    "test:unit": "node --test scripts/eval/tests/*.test.mjs"
   }
 }
