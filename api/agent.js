@@ -109,8 +109,8 @@ function promptFor({ ingredients, filters, exclude, hits }) {
 음식 종류: ${filters.cuisines?.join(', ') || '전체'}
 제외할 직전 메뉴: ${exclude.join(', ') || '없음'}
 
-아래 검색 문서에 있는 레시피를 근거로 정확히 3개 추천하세요. 선택한 음식 종류가 있으면 해당 종류를 우선하고, 3개가 부족할 때만 다른 음식 종류를 보충하세요. 검색 문서에 없는 조리법을 새로 지어내지 말고, 재료가 부족하면 missingIngredients에 표시하세요. 제외 메뉴는 반환하지 마세요. 각 메뉴의 recipe 배열은 최소 5~6개의 현실적인 조리 단계로 작성하세요. 모든 단계에 구체적인 조리 시간(예: 2~3분), 불 세기(강불/중불/약불), 소금·후추·식용유·간장처럼 필요한 기본 조미료의 사용 여부와 양 또는 "사용하지 않음"을 포함하세요. 재료 손질, 예열 또는 기름 두르기, 핵심 조리, 간 맞추기, 마무리 순서가 자연스럽게 이어지도록 작성하세요. 반드시 JSON 객체 하나만 반환하세요.
-형식: {"menus":[{"name":"메뉴명","description":"짧은 설명","recipe":["조리 단계"],"cookTime":"조리 시간","difficulty":"쉬움|보통|어려움","ingredients":["필요 재료"],"missingIngredients":["추가 재료"]}]}
+아래 검색 문서에 있는 레시피를 근거로 정확히 3개 추천하세요. 선택한 음식 종류가 있으면 해당 종류를 우선하고, 3개가 부족할 때만 다른 음식 종류를 보충하세요. 검색 문서에 없는 조리법을 새로 지어내지 말고, 재료가 부족하면 missingIngredients에 표시하세요. 제외 메뉴는 반환하지 마세요. 각 메뉴의 recipe 배열은 최소 5~6개의 현실적인 조리 단계로 작성하세요. 모든 단계에 구체적인 조리 시간(예: 2~3분), 불 세기(강불/중불/약불), 소금·후추·식용유·간장처럼 필요한 기본 조미료의 사용 여부와 양 또는 "사용하지 않음"을 포함하세요. 음식 종류·필요 재료·태그·조리 시간·난이도는 각각 별도 필드에만 넣고 recipe 배열에는 절대 넣지 마세요. 재료 손질, 예열 또는 기름 두르기, 핵심 조리, 간 맞추기, 마무리 순서가 자연스럽게 이어지도록 작성하세요. 반드시 JSON 객체 하나만 반환하세요.
+형식: {"menus":[{"name":"메뉴명","description":"짧은 설명","cuisine":["음식 종류"],"tags":["태그"],"recipe":["조리 단계"],"cookTime":"조리 시간","difficulty":"쉬움|보통|어려움","ingredients":["필요 재료"],"missingIngredients":["추가 재료"]}]}
 
 <검색 문서>
 ${context}
@@ -192,17 +192,6 @@ function extractRecipeIngredients(content) {
     .filter(Boolean);
 }
 
-// 검색 문서에서 조리 순서 구간만 추출하고 제목·메타데이터는 단계에서 제외합니다.
-function extractRecipeSteps(content) {
-  const text = String(content || '');
-  const labeledMatch = text.match(/조리\s*순서\s*:\s*(.*?)(?=\.\s*(?:태그|조리\s*시간|난이도)\s*:|$)/);
-  const source = labeledMatch ? labeledMatch[1] : text;
-  return source
-    .split(/[.。]/)
-    .map(step => step.trim())
-    .filter(step => step && !/^(?:음식\s*종류|필요\s*재료|조리\s*순서|태그|조리\s*시간|난이도)\s*:/.test(step));
-}
-
 function resolveCookTime(value, content, recipe = []) {
   const format = candidate => {
     const match = String(candidate || '').match(/(\d+)\s*(?:[~\-–]\s*(\d+)\s*)?분/);
@@ -248,30 +237,84 @@ function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = t
     failures,
     value: {
       ...menu,
-      name: hit?.recipe_name,
+      name: normalizeRecipeName(hit?.recipe_name),
       cuisine: hit?.cuisine || [],
       cookTime: resolveCookTime(menu?.cookTime, hit?.content, menu?.recipe),
       ingredients: requiredIngredients,
-      missingIngredients: expectedMissing
+      missingIngredients: expectedMissing,
+      recipe: cleanRecipeSteps(menu?.recipe)
     }
   };
 }
 
 // Claude가 누락한 메뉴를 검색 문서만으로 보충할 때 사용할 기본 메뉴 객체를 만듭니다.
+const RECIPE_METADATA_LINE = /^(?:음식\s*종류|필요\s*재료|태그|조리\s*시간|난이도)\s*:/;
+
+function extractLabeledValue(content, label) {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = String(content || '').match(new RegExp(`(?:^|\\n|[.。]\\s*)${escapedLabel}\\s*:\\s*([^\\n.。]+)`, 'm'));
+  return match ? match[1].trim() : '';
+}
+
+function extractRecipeSteps(content) {
+  const source = String(content || '').replace(/\r/g, '');
+  const match = source.match(/(?:^|\n|[.。]\s*)조리\s*순서\s*:\s*([\s\S]*?)(?=(?:\n|[.。]\s*)(?:음식\s*종류|필요\s*재료|태그|조리\s*시간|난이도)\s*:|$)/m);
+  if (!match) return [];
+  return match[1]
+    .replace(/(?:^|\s)\d+\s*[.)]\s*/g, '\n')
+    .split(/\n+/)
+    .map(step => step.trim().replace(/^[-•]\s*/, '').replace(/^[.。\s]+|[.。\s]+$/g, ''))
+    .filter(step => step && !RECIPE_METADATA_LINE.test(step));
+}
+
+function cleanRecipeSteps(recipe) {
+  const values = Array.isArray(recipe) ? recipe : [];
+  return values.flatMap(value => {
+    const step = String(value || '').trim();
+    if (!step) return [];
+    const structuredSteps = step.includes('조리 순서') ? extractRecipeSteps(step) : [];
+    return structuredSteps.length ? structuredSteps : [step];
+  }).filter(step => !RECIPE_METADATA_LINE.test(step));
+}
+
+function normalizeRecipeName(name) {
+  return String(name || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/(^|\s)([^\s]+)(?:\s+\2)(?=\s|$)/g, '$1$2');
+}
+
+function parseRecipeMetadata(content) {
+  const ingredients = extractLabeledValue(content, '필요 재료')
+    .split(/,|\s+및\s+|\s+와\s+|\s+과\s+/)
+    .map(item => item.trim())
+    .filter(Boolean);
+  const cookTime = extractLabeledValue(content, '조리 시간').match(/\d+\s*분/)?.[0] || '';
+  const difficulty = extractLabeledValue(content, '난이도').match(/쉬움|보통|어려움/)?.[0] || '';
+  return {
+    cuisine: extractLabeledValue(content, '음식 종류'),
+    ingredients,
+    tags: extractLabeledValue(content, '태그').split(/,|\s+/).map(tag => tag.trim()).filter(Boolean),
+    cookTime,
+    difficulty,
+    recipe: extractRecipeSteps(content)
+  };
+}
+
 function fallbackMenuFromHit(hit, ownedIngredients) {
   const content = String(hit.content || '');
-  const requiredIngredients = hit.requiredIngredients || [];
-  const difficulty = content.match(/(?:난이도는|난이도\s*:)\s*(쉬움|보통|어려움)/);
-  const recipe = extractRecipeSteps(content);
+  const metadata = parseRecipeMetadata(content);
+  const requiredIngredients = hit.requiredIngredients?.length ? hit.requiredIngredients : metadata.ingredients;
   return {
-    name: hit.recipe_name,
-    cuisine: hit.cuisine || inferCuisine(hit.recipe_name, content),
-    description: content.split(/[.。]/)[0].trim(),
-    recipe,
-    cookTime: resolveCookTime('', content, recipe),
-    difficulty: difficulty ? difficulty[1] : '보통',
+    name: normalizeRecipeName(hit.recipe_name),
+    cuisine: hit.cuisine || metadata.cuisine || inferCuisine(hit.recipe_name, content),
+    description: metadata.recipe[0] || normalizeRecipeName(hit.recipe_name),
+    recipe: metadata.recipe,
+    cookTime: resolveCookTime(metadata.cookTime, content, metadata.recipe),
+    difficulty: metadata.difficulty || '보통',
     ingredients: requiredIngredients,
-    missingIngredients: calculateMissingIngredients(ownedIngredients, requiredIngredients)
+    missingIngredients: calculateMissingIngredients(ownedIngredients, requiredIngredients),
+    tags: metadata.tags
   };
 }
 
@@ -327,9 +370,9 @@ module.exports = async function handler(req, res) {
       // LLM 응답이 실패해도 검색 후보의 기본 정보로 3개를 구성합니다.
       console.error('LLM recommendation failed:', error.message);
     }
-    const hitByName = new Map(rankedHits.map(hit => [hit.recipe_name, hit]));
-    const normalizedMenuName = value => String(value || '').replace(/\s+/g, '');
-    const findHit = name => hitByName.get(name) || rankedHits.find(hit => normalizedMenuName(hit.recipe_name) === normalizedMenuName(name));
+    const hitByName = new Map(rankedHits.map(hit => [normalizeRecipeName(hit.recipe_name), hit]));
+    const normalizedMenuName = value => normalizeRecipeName(value).replace(/\s+/g, '');
+    const findHit = name => hitByName.get(normalizeRecipeName(name)) || rankedHits.find(hit => normalizedMenuName(hit.recipe_name) === normalizedMenuName(name));
     const excludedNames = new Set(exclude);
     const seenGeneratedNames = new Set();
     const validationFailures = [];
@@ -345,15 +388,15 @@ module.exports = async function handler(req, res) {
       if (!validation.ok) validationFailures.push({ menu: menu.name, reasons: validation.failures });
       return validation.ok ? validation.value : null;
     }).filter(Boolean);
-    const seenNames = new Set(menus.map(menu => menu.name));
+    const seenNames = new Set(menus.map(menu => normalizedMenuName(menu.name)));
     for (const hit of rankedHits) {
       if (menus.length >= 3) break;
-      if (seenNames.has(hit.recipe_name) || excludedNames.has(hit.recipe_name)) continue;
+      if (seenNames.has(normalizedMenuName(hit.recipe_name)) || excludedNames.has(hit.recipe_name)) continue;
       const fallback = fallbackMenuFromHit(hit, body.ingredients);
       const validation = validateMenu(fallback, { hit, ownedIngredients: body.ingredients, cuisines, strictCuisine });
       if (validation.ok) {
         menus.push(validation.value);
-        seenNames.add(hit.recipe_name);
+        seenNames.add(normalizedMenuName(hit.recipe_name));
       } else {
         validationFailures.push({ menu: hit.recipe_name, reasons: validation.failures });
       }
@@ -370,13 +413,13 @@ module.exports = async function handler(req, res) {
         }));
         for (const hit of rankRecipeHits(body.ingredients, relaxedEnriched)) {
           if (menus.length >= 3) break;
-          if (seenNames.has(hit.recipe_name) || excludedNames.has(hit.recipe_name)) continue;
+          if (seenNames.has(normalizedMenuName(hit.recipe_name)) || excludedNames.has(hit.recipe_name)) continue;
           const fallback = fallbackMenuFromHit(hit, body.ingredients);
           const validation = validateMenu(fallback, { hit, ownedIngredients: body.ingredients, cuisines, strictCuisine: false });
           if (validation.ok) {
             console.warn(`Cuisine fallback used for ${hit.recipe_name}: ${hit.cuisine.join(', ')}`);
             menus.push(validation.value);
-            seenNames.add(hit.recipe_name);
+            seenNames.add(normalizedMenuName(hit.recipe_name));
           }
         }
       } catch (error) {
