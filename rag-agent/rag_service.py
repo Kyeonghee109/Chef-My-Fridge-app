@@ -5,9 +5,15 @@ import os
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from langchain_anthropic import ChatAnthropic
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
+from langfuse import observe
+from langfuse.langchain import CallbackHandler
 from pydantic import BaseModel, Field
 
 from recipe_loader import load_recipes
@@ -62,11 +68,13 @@ class RagService:
         cuisine_text = f"{' '.join(cuisines or [])} 음식" if cuisines else ""
         return f"{' '.join(ingredients)} {cuisine_text}로 만들 수 있는 요리 레시피"
 
+    @observe(name="my_service")
     @trace
     def my_service(self, prompt: str) -> dict[str, Any]:
         """LLM을 호출하고 구조화된 응답과 토큰 사용량을 함께 반환합니다."""
         structured = self.llm.with_structured_output(RecommendationResponse, include_raw=True)
-        result = structured.invoke(prompt)
+        langfuse_handler = CallbackHandler()
+        result = structured.invoke(prompt, config={"callbacks": [langfuse_handler]})
         raw = result.get("raw") if isinstance(result, dict) else None
         response = result.get("parsed") if isinstance(result, dict) else result
         parsing_error = result.get("parsing_error") if isinstance(result, dict) else None
@@ -77,6 +85,7 @@ class RagService:
             "usage": token_usage(raw),
         }
 
+    @observe(name="recipe-recommend")
     @trace
     def recommend(self, ingredients: list[str], top_k: int, cuisines: list[str] | None = None) -> list[Recommendation]:
         """후보 레시피를 검색하고 재료 매칭 결과를 Claude의 구조화된 추천으로 변환합니다."""

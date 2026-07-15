@@ -7,13 +7,20 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from rag_service import RagService
-
-FIXED_CUISINES = {"한식", "중식", "양식", "일식", "분식"}
-
+FIXED_CUISINES = {"한식", "중식", "양식", "일식"}
 
 load_dotenv()
+from langfuse import get_client
+from rag_service import RagService
+
 app = FastAPI(title="Fridge Recipe RAG Agent", version="1.0.0")
+
+
+@app.on_event("shutdown")
+def flush_langfuse() -> None:
+    """프로세스 종료 전에 남은 Langfuse 이벤트를 전송합니다."""
+    if os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"):
+        get_client().flush()
 
 
 class RecommendRequest(BaseModel):
