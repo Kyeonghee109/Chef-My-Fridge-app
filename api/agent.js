@@ -182,6 +182,35 @@ function calculateMissingIngredients(ownedIngredients, requiredIngredients) {
   return requiredIngredients.filter(item => !owned.has(normalizeIngredient(item)));
 }
 
+function sameIngredientList(left, right) {
+  const normalizeList = values => [...new Set((Array.isArray(values) ? values : []).map(canonicalIngredient).filter(Boolean))].sort();
+  return JSON.stringify(normalizeList(left)) === JSON.stringify(normalizeList(right));
+}
+
+function validateMenu(menu, { hit, ownedIngredients, cuisines, strictCuisine = true }) {
+  const failures = [];
+  if (!hit) failures.push('검색 후보에 없는 메뉴');
+  const requiredIngredients = hit?.requiredIngredients || [];
+  const matchedIngredients = requiredIngredients.filter(item => ownedIngredients.some(owned => canonicalIngredient(owned) === canonicalIngredient(item)));
+  const expectedMissing = calculateMissingIngredients(ownedIngredients, requiredIngredients);
+  if (strictCuisine && cuisines.length && !hit?.cuisine?.some(cuisine => cuisines.includes(cuisine))) {
+    failures.push(`선택 cuisine 불일치: ${hit?.cuisine?.join(', ') || '없음'}`);
+  }
+  if (matchedIngredients.length < 1) failures.push('사용자 재료와 실제 교집합 없음');
+  if (!sameIngredientList(menu?.missingIngredients, expectedMissing)) failures.push('missingIngredients 계산 불일치');
+  return {
+    ok: failures.length === 0,
+    failures,
+    value: {
+      ...menu,
+      name: hit?.recipe_name,
+      cuisine: hit?.cuisine || [],
+      ingredients: requiredIngredients,
+      missingIngredients: expectedMissing
+    }
+  };
+}
+
 // Claude가 누락한 메뉴를 검색 문서만으로 보충할 때 사용할 기본 메뉴 객체를 만듭니다.
 function fallbackMenuFromHit(hit, ownedIngredients) {
   const content = String(hit.content || '');
@@ -257,29 +286,59 @@ module.exports = async function handler(req, res) {
     const findHit = name => hitByName.get(name) || rankedHits.find(hit => normalizedMenuName(hit.recipe_name) === normalizedMenuName(name));
     const excludedNames = new Set(exclude);
     const seenGeneratedNames = new Set();
-    // 모델이 검색 문서에 없는 이름이나 선택하지 않은 카테고리를 반환하지 못하게 합니다.
+    const validationFailures = [];
+    const strictCuisine = cuisines.length > 0;
     const menus = generatedMenus.map(menu => {
       const hit = findHit(menu.name);
-      if (!hit || excludedNames.has(hit.recipe_name) || seenGeneratedNames.has(hit.recipe_name)) return null;
+      if (!hit || excludedNames.has(hit?.recipe_name) || seenGeneratedNames.has(hit?.recipe_name)) {
+        validationFailures.push({ menu: menu?.name || '(이름 없음)', reasons: [!hit ? '검색 후보에 없는 메뉴' : '중복 또는 제외 메뉴'] });
+        return null;
+      }
       seenGeneratedNames.add(hit.recipe_name);
-      const requiredIngredients = hit?.requiredIngredients?.length
-        ? hit.requiredIngredients
-        : (Array.isArray(menu.ingredients) ? menu.ingredients : []);
-      return {
-        ...menu,
-        cuisine: hit?.cuisine || inferCuisine(menu.name, menu.description),
-        ingredients: requiredIngredients,
-        missingIngredients: calculateMissingIngredients(body.ingredients, requiredIngredients)
-      };
+      const validation = validateMenu(menu, { hit, ownedIngredients: body.ingredients, cuisines, strictCuisine });
+      if (!validation.ok) validationFailures.push({ menu: menu.name, reasons: validation.failures });
+      return validation.ok ? validation.value : null;
     }).filter(Boolean);
-    const isPreferredMenu = menu => !cuisines.length || (menu.cuisine || []).some(cuisine => cuisines.includes(cuisine));
-    menus.sort((left, right) => Number(!isPreferredMenu(right)) - Number(!isPreferredMenu(left)));
     const seenNames = new Set(menus.map(menu => menu.name));
     for (const hit of rankedHits) {
       if (menus.length >= 3) break;
       if (seenNames.has(hit.recipe_name) || excludedNames.has(hit.recipe_name)) continue;
-      menus.push(fallbackMenuFromHit(hit, body.ingredients));
-      seenNames.add(hit.recipe_name);
+      const fallback = fallbackMenuFromHit(hit, body.ingredients);
+      const validation = validateMenu(fallback, { hit, ownedIngredients: body.ingredients, cuisines, strictCuisine });
+      if (validation.ok) {
+        menus.push(validation.value);
+        seenNames.add(hit.recipe_name);
+      } else {
+        validationFailures.push({ menu: hit.recipe_name, reasons: validation.failures });
+      }
+    }
+    // 선택 cuisine 후보만으로 부족할 때만 검색 범위를 완화해 마지막 보충을 시도합니다.
+    if (menus.length < 3 && cuisines.length) {
+      try {
+        const relaxedHits = await searchRecipes(queryEmbedding, config, []);
+        const relaxedUniqueHits = [...new Map(relaxedHits.map(hit => [hit.recipe_name, hit])).values()];
+        const relaxedEnriched = relaxedUniqueHits.map(hit => ({
+          ...hit,
+          requiredIngredients: extractRecipeIngredients(hit.content),
+          cuisine: Array.isArray(hit.metadata?.cuisine) && hit.metadata.cuisine.length ? hit.metadata.cuisine : inferCuisine(hit.recipe_name, hit.content)
+        }));
+        for (const hit of rankRecipeHits(body.ingredients, relaxedEnriched)) {
+          if (menus.length >= 3) break;
+          if (seenNames.has(hit.recipe_name) || excludedNames.has(hit.recipe_name)) continue;
+          const fallback = fallbackMenuFromHit(hit, body.ingredients);
+          const validation = validateMenu(fallback, { hit, ownedIngredients: body.ingredients, cuisines, strictCuisine: false });
+          if (validation.ok) {
+            console.warn(`Cuisine fallback used for ${hit.recipe_name}: ${hit.cuisine.join(', ')}`);
+            menus.push(validation.value);
+            seenNames.add(hit.recipe_name);
+          }
+        }
+      } catch (error) {
+        console.error('Relaxed candidate search failed:', error.message);
+      }
+    }
+    if (validationFailures.length) {
+      console.warn('Recommendation validation failures:', JSON.stringify(validationFailures));
     }
     if (menus.length < 3) throw new Error('3개의 검색 후보를 확보하지 못했습니다.');
     return res.status(200).json({
