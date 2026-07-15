@@ -110,6 +110,26 @@ async function searchRecipes(queryEmbedding, config, cuisines = []) {
   }
 }
 
+function mergeRecipeChunks(hits) {
+  const grouped = new Map();
+  (Array.isArray(hits) ? hits : []).forEach(hit => {
+    const key = hit?.recipe_name;
+    if (!key) return;
+    if (!grouped.has(key)) grouped.set(key, { ...hit, _chunks: [] });
+    grouped.get(key)._chunks.push({
+      index: Number(hit.metadata?.chunk_index ?? 0),
+      content: String(hit.content || '')
+    });
+  });
+  return [...grouped.values()].map(({ _chunks, ...hit }) => ({
+    ...hit,
+    content: _chunks
+      .sort((left, right) => left.index - right.index)
+      .map(chunk => chunk.content)
+      .join(' ')
+  }));
+}
+
 function promptFor({ ingredients, filters, exclude, hits }) {
   const context = hits.map(hit => `- [${hit.recipe_name}] 필요 재료: ${(hit.requiredIngredients || []).join(', ')}\n  ${String(hit.content || '').slice(0, PROMPT_CONTENT_LIMIT)}`).join('\n');
   return `냉장고 재료 기반 레시피 추천을 수행하세요.
@@ -407,7 +427,7 @@ module.exports = async function handler(req, res) {
     const query = `${body.ingredients.join(', ')} ${cuisines.join(', ')} ${filters.time || ''} ${filters.difficulty || ''} ${filters.diet || ''}`;
     const queryEmbedding = await embed(query, config.openai);
     const selectedHits = await searchRecipes(queryEmbedding, config, cuisines);
-    const selectedUniqueHits = [...new Map(selectedHits.map(hit => [hit.recipe_name, hit])).values()];
+    const selectedUniqueHits = mergeRecipeChunks(selectedHits);
     const preferredHits = filterByCuisine(selectedUniqueHits, cuisines);
     const allHits = cuisines.length ? preferredHits : selectedUniqueHits;
     if (!allHits.length) return res.status(404).json({ error: '선택한 음식 종류의 레시피를 찾지 못했습니다.' });
@@ -478,7 +498,7 @@ module.exports = async function handler(req, res) {
     if (menus.length < 3 && cuisines.length) {
       try {
         const relaxedHits = await searchRecipes(queryEmbedding, config, []);
-        const relaxedUniqueHits = [...new Map(relaxedHits.map(hit => [hit.recipe_name, hit])).values()];
+        const relaxedUniqueHits = mergeRecipeChunks(relaxedHits);
         const relaxedEnriched = relaxedUniqueHits.map(hit => ({
           ...hit,
           requiredIngredients: extractRecipeIngredients(hit.content),
